@@ -1,9 +1,12 @@
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const { JWT_SECRET } = process.env;
 
 exports.register = async (req, res) => {
   try {
-    const { username, password, role } = req.body;
+    const { username, email, password, role } = req.body;
 
     // Check if the user already exists
     const existingUser = await User.findOne({ name: username });
@@ -18,6 +21,7 @@ exports.register = async (req, res) => {
     // Create a new user
     const user = new User({
       name: username,
+      email,
       password: hashedPassword,
       role
     });
@@ -25,9 +29,15 @@ exports.register = async (req, res) => {
     // Save the user to the database
     await user.save();
 
+    // Generate JWT token
+    const token = jwt.sign({ user_id: user._id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       message: 'User registered successfully',
-      user
+      user: {
+        name: user.name,
+        email: user.email
+      },
+      token
     });
   } catch (error) {
     console.error(error);
@@ -52,7 +62,15 @@ exports.login = async (req, res) => {
     }
 
     // Successful login
-    res.status(200).json({ message: 'Login successful', user });
+    const token = jwt.sign({ user_id: user._id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(201).json({
+      message: 'User logged in successfully',
+      user: {
+        name: user.name,
+        email: user.email
+      },
+      token
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
