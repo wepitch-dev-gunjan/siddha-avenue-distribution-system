@@ -30,10 +30,7 @@ app.use(
 );
 
 // Connect to MongoDB
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(MONGODB_URI);
 
 mongoose.connection.on("connected", () => {
   console.log("Database is connected");
@@ -49,8 +46,7 @@ app.get('/', (req, res) => {
 });
 // Routes
 readdirSync("./routes").map((r) => app.use("/", require("./routes/" + r)));
-
-// app.use("/", require("./services/googleAuthentication"));
+app.use("/", require("./services/googleAuthentication"));
 
 let server;
 
