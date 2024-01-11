@@ -2,7 +2,7 @@ const Role = require('../models/Role');
 
 exports.getRole = async (req, res) => {
   try {
-    const { role_id } = req
+    const { role_id } = req.params;
 
     // Fetch user details from the database
     const role = await Role.findOne({ _id: role_id });
