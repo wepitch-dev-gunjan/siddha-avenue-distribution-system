@@ -9,12 +9,16 @@ const userSchema = new Schema({
   },
   password: {
     type: String,
-    required: true,
+    // required: true,
   },
   role: {
     type: Schema.Types.ObjectId,
     ref: 'Role'
   }
+}, {
+  timestamps: true,
+}, {
+  strict: false
 });
 
 module.exports = model('User', userSchema);
