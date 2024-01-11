@@ -46,7 +46,6 @@ app.get('/', (req, res) => {
 });
 // Routes
 readdirSync("./routes").map((r) => app.use("/", require("./routes/" + r)));
-app.use("/", require("./services/googleAuthentication"));
 
 let server;
 
