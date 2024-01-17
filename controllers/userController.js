@@ -1,17 +1,21 @@
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const Otp = require('../models/Otp');
+const crypto = require('crypto');
 require('dotenv').config();
 const { JWT_SECRET } = process.env;
 
+const { client, smsCallback, messageType } = require('../services/smsService')
+
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, phone_number, password, role } = req.body;
 
-    // Check if the user already exists
-    const existingUser = await User.findOne({ name: username });
+    // Check if the phone number already exists
+    const existingUser = await User.findOne({ phone_number });
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ message: 'Phone number already exists' });
     }
 
     // Hash the password
@@ -21,7 +25,7 @@ exports.register = async (req, res) => {
     // Create a new user
     const user = new User({
       name: username,
-      email,
+      phone_number,
       password: hashedPassword,
       role
     });
@@ -30,12 +34,12 @@ exports.register = async (req, res) => {
     await user.save();
 
     // Generate JWT token
-    const token = jwt.sign({ user_id: user._id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ user_id: user._id, name: user.name, phone_number: user.phone_number }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       message: 'User registered successfully',
       user: {
         name: user.name,
-        email: user.email
+        phone_number: user.phone_number
       },
       token
     });
@@ -111,5 +115,95 @@ exports.getUsers = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.generateOtpByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.body;
+    if (!phone_number) return res.status(400).send({ error: "Phone number is required" });
+
+    const user = await User.findOne({ phone_number });
+    if (user && user.verified === true) return res.status(400).send({ error: "User is already verified" })
+    // Generate a random 4-digit OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Hash the OTP using SHA-256 for storage
+    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const expirationTime = new Date(); // Set the expiration time (e.g., 5 minutes from now)
+    expirationTime.setMinutes(expirationTime.getMinutes() + 5);
+
+    let otpObj = await Otp.findOne({ phone_number });
+    if (otpObj) {
+      otpObj.expiresAt = expirationTime;
+      otpObj.hashedOtp = hashedOtp;
+      otpObj.attempts = 0;
+    } else {
+      otpObj = new Otp({
+        phone_number,
+        hashedOtp,
+        expiresAt: expirationTime,
+      });
+    }
+
+    await otpObj.save();
+
+    const message = `OTP for log in is : ${otp}`;
+    client.sms.message(smsCallback, phone_number, message, messageType)
+    // Send the OTP to the client (avoid logging it)
+    res.status(200).send({
+      message: "OTP sent to the client",
+      otp
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+};
+
+exports.verifyOtpByPhone = async (req, res) => {
+  try {
+    const { phone_number, otp } = req.body;
+
+    let otpObj = await Otp.findOne({ phone_number });
+    if (!otpObj) return res.status(404).send({ error: "Phone number not found" });
+    if (otpObj.attempts >= 3 || new Date() > otpObj.expiresAt) {
+      // Handle cases where too many attempts or OTP expiration
+      return res.status(401).send({ error: "Invalid OTP token" });
+    }
+
+    // Hash the received OTP from the client
+    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+    // Verify if the hashed OTP from the client matches the hashed OTP stored in your data storage
+    if (hashedOtp !== otpObj.hashedOtp) {
+      // Increment the attempts on failed verification
+      otpObj.attempts++;
+      await otpObj.save();
+      return res.status(401).send({ error: "Invalid OTP token" });
+    }
+
+    // If OTP is valid, you can proceed with user verification
+    let user = await User.findOne({ phone_number });
+    if (!user) {
+      user = new User({
+        phone_number,
+        verified: true,
+      });
+
+      await user.save();
+    }
+
+    const { _id } = user;
+    const token = jwt.sign({ _id, phone_number }, JWT_SECRET)
+
+    res.status(200).send({
+      message: "User has verified OTP",
+      token
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({ error: "Internal server error" });
   }
 };

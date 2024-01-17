@@ -4,12 +4,16 @@ const userSchema = new Schema({
   name: {
     type: String,
   },
-  email: {
+  phone_number: {
     type: String,
   },
   password: {
     type: String,
     // required: true,
+  },
+  verified: {
+    type: Boolean,
+    default: false
   },
   role: {
     type: Schema.Types.ObjectId,
