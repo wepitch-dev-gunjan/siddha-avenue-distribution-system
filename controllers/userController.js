@@ -112,8 +112,6 @@ exports.generateOtpByPhone = async (req, res) => {
     const { phone_number } = req.body;
     if (!phone_number) return res.status(400).send({ error: "Phone number is required" });
 
-    const user = await User.findOne({ phone_number });
-    if (user && user.verified === true) return res.status(400).send({ error: "User is already verified" })
     // Generate a random 4-digit OTP
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -143,7 +141,6 @@ exports.generateOtpByPhone = async (req, res) => {
     // Send the OTP to the client (avoid logging it)
     res.status(200).send({
       message: "OTP sent to the client",
-      otp
     });
   } catch (error) {
     console.log(error);
