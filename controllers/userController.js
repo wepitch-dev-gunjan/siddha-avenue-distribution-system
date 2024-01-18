@@ -6,32 +6,30 @@ const crypto = require('crypto');
 require('dotenv').config();
 const { JWT_SECRET } = process.env;
 
-const { client, smsCallback, messageType } = require('../services/smsService')
+const { client, smsCallback, messageType } = require('../services/smsService');
+const Role = require('../models/Role');
 
 exports.register = async (req, res) => {
   try {
-    const { username, phone_number, password, role } = req.body;
+    const { username, phone_number, role } = req.body;
 
     // Check if the phone number already exists
-    const existingUser = await User.findOne({ phone_number });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Phone number already exists' });
+    const user = await User.findOne({ phone_number });
+    if (!existingUser) {
+      return res.status(400).json({ message: 'No user found' });
     }
 
-    // Hash the password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create a new user
-    const user = new User({
-      name: username,
-      phone_number,
-      password: hashedPassword,
-      role
-    });
+    user.username = username;
+    user.verified = true;
+    user.role = role;
 
     // Save the user to the database
     await user.save();
+
+    const existingRole = await Role.findOne({ _id: role });
+    if (!existingRole) return res.status(400).json({
+      error: 'Role not found'
+    })
 
     // Generate JWT token
     const token = jwt.sign({ user_id: user._id, name: user.name, phone_number: user.phone_number }, JWT_SECRET, { expiresIn: '7d' });
@@ -39,7 +37,8 @@ exports.register = async (req, res) => {
       message: 'User registered successfully',
       user: {
         name: user.name,
-        phone_number: user.phone_number
+        phone_number: user.phone_number,
+        role: existingRole.name
       },
       token
     });
@@ -59,20 +58,10 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid username' });
     }
 
-    // Compare passwords
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid password' });
-    }
-
     // Successful login
-    const token = jwt.sign({ user_id: user._id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ user_id: user._id, name: user.name, phone_number: user.phone_number }, JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({
       message: 'User logged in successfully',
-      user: {
-        name: user.name,
-        email: user.email
-      },
       token
     });
   } catch (error) {
@@ -83,7 +72,7 @@ exports.login = async (req, res) => {
 
 exports.getUser = async (req, res) => {
   try {
-    const { user_id } = req
+    const { user_id } = req;
 
     // Fetch user details from the database
     const user = await User.findOne({ _id: user_id });

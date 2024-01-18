@@ -7,10 +7,6 @@ const userSchema = new Schema({
   phone_number: {
     type: String,
   },
-  password: {
-    type: String,
-    // required: true,
-  },
   verified: {
     type: Boolean,
     default: false

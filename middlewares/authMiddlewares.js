@@ -1,5 +1,8 @@
 const Role = require("../models/Role");
 const User = require("../models/User");
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const { JWT_SECRET } = process.env;
 
 exports.userAuth = async (req, res, next) => {
   try {
@@ -11,15 +14,16 @@ exports.userAuth = async (req, res, next) => {
     // Verify the token using your secret key
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const user = await User.findOne({ email: decoded.email });
+    const user = await User.findOne({ phone_number: decoded.phone_number });
 
     if (!user) {
       return res.status(401).json({ error: 'User not authorized' });
     }
 
+    console.log(decoded)
     req.name = decoded.name;
-    req.email = decoded.email;
-    req.user_id = decoded.user_id
+    req.phone_number = decoded.phone_number;
+    req.user_id = decoded._id
 
     next();
   } catch (error) {
