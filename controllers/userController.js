@@ -76,7 +76,15 @@ exports.getUser = async (req, res) => {
 
     // Fetch user details from the database
     const user = await User.findOne({ _id: user_id });
-    res.status(200).json(user);
+    const roleObj = await Role.findOne({ _id: user.role });
+    const role = roleObj.name;
+
+    const response = {
+      name: user.name,
+      phone_number: user.phone_number,
+      role
+    }
+    res.status(200).json(response);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
