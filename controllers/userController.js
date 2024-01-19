@@ -91,6 +91,35 @@ exports.getUser = async (req, res) => {
   }
 };
 
+exports.editProfile = async (req, res) => {
+  try {
+    const { user_id } = req;
+    const { name, phone_number, role } = req.body;
+
+    const filter = {}
+    if (name) filter.name = name;
+    if (phone_number) filter.phone_number = phone_number;
+    if (role) {
+      const getRole = await Role.findOne({ name: role });
+      filter.role = getRole._id;
+    }
+
+    // Fetch user details from the database
+    const user = await User.findOneAndUpdate({ _id: user_id }, filter);
+
+    const response = {
+      name,
+      phone_number,
+      role
+    }
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
 exports.getUsers = async (req, res) => {
   try {
     const { role, search } = req.query;
