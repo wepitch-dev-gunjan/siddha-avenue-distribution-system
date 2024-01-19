@@ -77,7 +77,7 @@ exports.getUser = async (req, res) => {
     // Fetch user details from the database
     const user = await User.findOne({ _id: user_id });
     const roleObj = await Role.findOne({ _id: user.role });
-    const role = roleObj.name;
+    const role = roleObj?.name ? roleObj.name : 'No role assigned yet';
 
     const response = {
       name: user.name,
