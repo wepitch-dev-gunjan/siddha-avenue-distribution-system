@@ -1,6 +1,7 @@
 const Role = require("../models/Role");
 const User = require("../models/User");
 const jwt = require('jsonwebtoken');
+const { SCOPES, oauth2Client } = require("../services/googleConfig");
 require('dotenv').config();
 const { JWT_SECRET } = process.env;
 
@@ -43,6 +44,22 @@ exports.adminAuth = async (req, res, next) => {
     })
 
     next()
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({ error: 'Internal Server Error' });
+  }
+};
+
+exports.googleAuth = (req, res) => {
+  try {
+    const { token } = req.headers('Authorization');
+    if (!token) {
+      // Redirect the user to the OAuth 2.0 consent screen if not authenticated
+      return res.redirect(oauth2Client.generateAuthUrl({ access_type: 'offline', scope: SCOPES }));
+    }
+
+    oauth2Client.setCredentials(token);
+    next();
   } catch (error) {
     console.log(error);
     res.status(500).send({ error: 'Internal Server Error' });
