@@ -1,4 +1,5 @@
 const Role = require('../models/Role');
+const User = require('../models/User');
 
 exports.getRole = async (req, res) => {
   try {
@@ -15,8 +16,10 @@ exports.getRole = async (req, res) => {
 
 exports.getChildrenRoles = async (req, res) => {
   try {
-    const { role_id } = req.params;
-
+    const { user_id } = req;
+    const user = await User.findOne({ _id: user_id });
+    console.log(user)
+    const role_id = user.role;
     // Check if roleId is provided in the query parameter
     if (!role_id) {
       return res.status(400).json({ error: 'Role ID is required in the query parameter.' });
