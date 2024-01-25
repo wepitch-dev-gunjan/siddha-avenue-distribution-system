@@ -1,4 +1,3 @@
-const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const Otp = require('../models/Otp');
@@ -8,20 +7,22 @@ const { JWT_SECRET } = process.env;
 
 const { client, smsCallback, messageType } = require('../services/smsService');
 const Role = require('../models/Role');
+const { mongoose } = require('mongoose');
 
 exports.register = async (req, res) => {
   try {
-    const { username, phone_number, role } = req.body;
+    const { username, phone_number, role, parents } = req.body;
 
     // Check if the phone number already exists
     const user = await User.findOne({ phone_number });
-    if (!existingUser) {
+    if (!user) {
       return res.status(400).json({ message: 'No user found' });
     }
 
     user.username = username;
     user.verified = true;
     user.role = role;
+    user.parents = parents;
 
     // Save the user to the database
     await user.save();
@@ -141,6 +142,27 @@ exports.getUsers = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.getChildren = async (req, res) => {
+  try {
+    const { parents } = req.query;
+    if (!parents) return res.status(200).send([]);
+    console.log("parents : " + parents)
+    // Validate and parse the parents parameter
+    let parsedParents = [parents]
+
+    if (!Array.isArray(parsedParents) || !parsedParents.every(id => mongoose.Types.ObjectId.isValid(id))) {
+
+    }
+
+    // Find users with parents matching all provided IDs
+    const children = await User.find({ parents: { $in: parsedParents } }).lean();
+    res.status(200).json(children);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error', message: error.message });
   }
 };
 

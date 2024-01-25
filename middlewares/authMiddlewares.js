@@ -21,7 +21,6 @@ exports.userAuth = async (req, res, next) => {
       return res.status(401).json({ error: 'User not authorized' });
     }
 
-    console.log(decoded)
     req.name = decoded.name;
     req.phone_number = decoded.phone_number;
     req.user_id = decoded._id

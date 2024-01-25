@@ -14,7 +14,11 @@ const userSchema = new Schema({
   role: {
     type: Schema.Types.ObjectId,
     ref: 'Role'
-  }
+  },
+  parents: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, {
   timestamps: true,
 }, {

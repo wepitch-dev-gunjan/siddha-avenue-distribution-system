@@ -4,9 +4,14 @@ const User = require('../models/User');
 exports.getRole = async (req, res) => {
   try {
     const { role_id } = req.params;
+    if (!role_id) return res.status(400).send({
+      error: 'Role Id is required'
+    })
 
-    // Fetch user details from the database
     const role = await Role.findOne({ _id: role_id });
+    if (!role) return res.status(404).send({
+      error: "Role not found"
+    })
     res.status(200).json(role);
   } catch (error) {
     console.error(error);
@@ -16,13 +21,12 @@ exports.getRole = async (req, res) => {
 
 exports.getChildrenRoles = async (req, res) => {
   try {
-    const { user_id } = req;
-    const user = await User.findOne({ _id: user_id });
-    console.log(user)
-    const role_id = user.role;
+    let { role_id } = req.params;
+    // role_id = JSON.parse(role_id);
+    console.log('getChildrenRoles', !!role_id);
     // Check if roleId is provided in the query parameter
-    if (!role_id) {
-      return res.status(400).json({ error: 'Role ID is required in the query parameter.' });
+    if (role_id == undefined) {
+      return res.status(400).json({ error: 'Role ID is required.' });
     }
 
     // Fetch the role details based on the provided roleId
@@ -31,31 +35,13 @@ exports.getChildrenRoles = async (req, res) => {
       return res.status(404).json({ error: 'Role not found' });
     }
 
-    // Recursively fetch all roles in the children hierarchy
-    const getChildrenRoles = async (roleId) => {
-      const role = await Role.findById(roleId).lean(); // Use lean() to convert to plain JavaScript object
-      if (!role || !role.children || role.children.length === 0) {
-        return { ...role, children: undefined }; // Exclude children property when it's empty
-      }
-
-      // Recursively fetch roles for each child
-      const childRolesPromises = role.children.map(childId => getChildrenRoles(childId));
-      const childRoles = await Promise.all(childRolesPromises);
-
-      // Return the role with its children
-      return { ...role, children: childRoles };
-    };
-
-    // Fetch roles in the children hierarchy
-    const rolesHierarchy = await getChildrenRoles(role_id);
-
-    res.status(200).json(rolesHierarchy);
+    const childrenRoles = await Role.find({ _id: { $in: role.children } })
+    res.status(200).json(childrenRoles);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
-
 
 exports.getRoles = async (req, res) => {
   try {
@@ -91,7 +77,6 @@ exports.createRole = async (req, res) => {
     // Find parent roles if there are any
     if (parents?.length > 0) {
       parentRoles = await Role.find({ _id: { $in: parents } });
-      console.log(parentRoles)
       // Check if all requested parent roles were found
       if (parentRoles.length !== parents.length) {
         return res.status(400).send({
