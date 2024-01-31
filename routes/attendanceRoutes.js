@@ -1,11 +1,12 @@
 const express = require("express");
 const { createAttendance, getAttendance, getAttendances, editAttendance, deleteAttendance } = require("../controllers/attendanceController");
+const { userAuth, adminAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
 
-router.post("/", createAttendance);
-router.get("/attendance/:id", getAttendance);
-router.get("/attendance", getAttendances);
-router.put("/attendance/:id", editAttendance);
-router.delete("attendance/:id", deleteAttendance);
+router.post("/", userAuth, createAttendance);
+router.get("/attendance/:id", userAuth, getAttendance);
+router.get("/attendance", userAuth, getAttendances);
+router.put("/attendance/:id", userAuth, adminAuth, editAttendance);
+router.delete("attendance/:id", userAuth, adminAuth, deleteAttendance);
 
 module.exports = router;
