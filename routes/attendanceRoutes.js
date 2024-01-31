@@ -1,4 +1,5 @@
 const express = require("express");
+const { createAttendance, getAttendance, getAttendances, editAttendance, deleteAttendance } = require("../controllers/attendanceController");
 const router = express.Router();
 
 router.post("/", createAttendance);
