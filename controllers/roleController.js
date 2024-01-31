@@ -61,7 +61,7 @@ exports.createRole = async (req, res) => {
   try {
     // Extract data from the request body
     const { role_name, parents, children } = req.body;
-
+    console.log(role_name)
     // Check if the role already exists
     let role = await Role.findOne({ name: role_name });
     if (role) {
