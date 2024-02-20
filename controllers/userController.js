@@ -6,6 +6,7 @@ const crypto = require("crypto");
 require("dotenv").config();
 const { JWT_SECRET } = process.env;
 const { token } = require("../middlewares/authMiddlewares");
+require("dotenv").config();
 
 const { client, smsCallback, messageType } = require("../services/smsService");
 const Role = require("../models/Role");
@@ -16,7 +17,8 @@ const { validationResult } = require("express-validator");
 // Route to change password
 exports.resetPassword = async (req, res) => {
   try {
-    const { user_id } = req;
+    const { token } = req.query;
+    const { user_id } = jwt.decode(token, JWT_SECRET);
     const { newPassword, confirmNewPassword } = req.body;
     if (newPassword !== confirmNewPassword) {
       return res.status(400).json({ error: "Passwords do not match" });
@@ -38,12 +40,17 @@ exports.resetPassword = async (req, res) => {
 
 exports.forgotPassword = (req, res) => {
   try {
+    const { user_id } = req;
+
     // Validate the request parameters
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const token = jwt.sign({ user_id }, JWT_SECRET);
+
+    const link = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
     const { to } = req.body;
 
     const mailOptions = {
@@ -97,7 +104,8 @@ exports.forgotPassword = (req, res) => {
                     >
                       Dear ${to},<br /><br />
                       <!-- You can insert the OTP dynamically here -->
-                      Your link to reset your password is:
+                      Your link to reset your password is: 
+                      <a href=${link} >Click Here</a><br/><br/>
                                             
                     </p>
                   </td>
