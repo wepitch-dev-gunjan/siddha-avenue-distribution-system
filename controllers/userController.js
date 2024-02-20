@@ -1,17 +1,133 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 const Otp = require("../models/Otp");
 const crypto = require("crypto");
 require("dotenv").config();
 const { JWT_SECRET } = process.env;
+const { token } = require("../middlewares/authMiddlewares");
 
 const { client, smsCallback, messageType } = require("../services/smsService");
 const Role = require("../models/Role");
 const { mongoose } = require("mongoose");
+const { transporter } = require("../services/forgotPassword");
+const { validationResult } = require("express-validator");
+
+// Route to change password
+exports.resetPassword = async (req, res) => {
+  try {
+    const { user_id } = req;
+    const { newPassword, confirmNewPassword } = req.body;
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ error: "Passwords do not match" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const user = await User.findOne({ _id: user_id });
+    user.password = hashedPassword;
+    await user.save();
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({ error: "Internal Server Error" });
+  }
+
+  // Update the user's password
+};
+
+exports.forgotPassword = (req, res) => {
+  try {
+    // Validate the request parameters
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { to } = req.body;
+
+    const mailOptions = {
+      to,
+      subject: "Reset Password",
+      html: `
+      <body>
+        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td align="center" bgcolor="#ffffff">
+              <table border="0" cellpadding="0" cellspacing="0" width="600">
+                <!-- Header Section -->
+                <tr>
+                  <td align="center" valign="top">
+                    <a>
+                      <img
+                        src="https://sortmycollege.com/wp-content/uploads/2023/05/SORTMYCOLLEGE-12.png"
+                        alt=""
+                        width="200"
+                        height="50"
+                      />
+                    </a>
+                  </td>
+                </tr>
+  
+                <!-- Content Section -->
+                <tr>
+                  <td align="center">
+                    <h1
+                      style="
+                        font-family: 'Arial', 'Helvetica', sans-serif;
+                        font-size: 24px;
+                        color: #1f0a68;
+                      "
+                    >
+                      Welcome to
+                      <a>
+                        Siddha Connect
+                      </a>
+                    </h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <p
+                      style="
+                        font-family: 'Arial', 'Helvetica', sans-serif;
+                        font-size: 16px;
+                        color: #333;
+                      "
+                    >
+                      Dear ${to},<br /><br />
+                      <!-- You can insert the OTP dynamically here -->
+                      Your link to reset your password is:
+                                            
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    `,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("Error sending email:", error);
+        res.status(500).json({ error: "Error sending email" });
+      } else {
+        console.log("Email sent:", info.response);
+        res.json({ message: "Email sent successfully" });
+      }
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, role, parent, password } = req.body;
 
     // Check if the user already exists
     let user = await User.findOne({ email });
@@ -19,12 +135,14 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     // Create a new user instance
     user = new User({
       name,
       email,
-      password,
-      verified: true,
+      role,
+      parent,
+      password: hashedPassword,
     });
 
     // Save the user to the database
@@ -53,12 +171,18 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.query;
+    const { email, password } = req.body;
 
-    // Check if the user exists
-    const user = await User.findOne({ name: username });
+    // Find the user by email
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: "Invalid username" });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Check if the password is correct
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     // Successful login
