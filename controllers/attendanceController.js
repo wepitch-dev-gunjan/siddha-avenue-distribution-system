@@ -1,35 +1,94 @@
 const Attendance = require("../models/Attendance");
 const User = require("../models/User");
 
-exports.createAttendance = async (req, res) => {
+exports.punchIn = async (req, res) => {
   try {
     const { user_id } = req;
-    const { location, address } =
-      req.body;
+    const { location, address } = req.body;
 
     // Validations
-    if (!location) return res.status(400).json({
-      error: 'Location is required'
-    })
-    if (!address) return res.status(400).json({
-      error: 'Address is required'
-    })
+    if (!location || typeof location !== 'object' || !address) {
+      return res.status(400).json({ error: 'Invalid location or address provided' });
+    }
 
-    // create a new Attendance
-    const attendance = await Attendance({
+    // Check if the user already has an active attendance (punch_in without punch_out)
+    const punchedIn = await Attendance.findOne({
       user: user_id,
-      location,
-      address,
-    })
+      'punch_in.is_punched_in': true,
+      'punch_out.is_punched_out': false,
+    });
+
+    if (punchedIn) {
+      return res.status(400).json({ error: 'You have already punched in. Please punch out before punching in again.' });
+    }
+
+    // Create a new Attendance
+    const attendance = new Attendance({
+      user: user_id,
+      punch_in: {
+        location,
+        address,
+        is_punched_in: true,
+        time: new Date(),
+      },
+    });
+
     await attendance.save();
 
     return res.status(200).json({
-      message: "Attendance marked successfully.",
+      message: 'Attendance marked successfully.',
       data: attendance,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+
+exports.punchOut = async (req, res) => {
+  try {
+    const { user_id } = req;
+    const { location, address } = req.body;
+
+    // Validations
+    if (!location || typeof location !== 'object' || !address) {
+      return res.status(400).json({ error: 'Invalid location or address provided' });
+    }
+
+    // Find the active attendance record for the user (punch_in without punch_out)
+    const activeAttendance = await Attendance.findOne({
+      user: user_id,
+      'punch_in.is_punched_in': true,
+      'punch_out.is_punched_out': false,
+    });
+
+    // Check if the user has already punched out
+    if (!activeAttendance) {
+      return res.status(400).json({ error: 'You have not punched in yet. Please punch in before punching out.' });
+    }
+
+    // Update the existing attendance record to mark the punch-out time
+    activeAttendance.punch_out = {
+      location,
+      address,
+      is_punched_out: true,
+      time: new Date(),
+    };
+
+    // Calculate and update the duration
+    activeAttendance.duration = activeAttendance.calculateDuration();
+
+    // Save the updated attendance record
+    await activeAttendance.save();
+
+    return res.status(200).json({
+      message: 'Attendance punched out successfully.',
+      data: activeAttendance,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
