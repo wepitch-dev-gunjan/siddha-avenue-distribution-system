@@ -41,6 +41,7 @@ exports.resetPassword = async (req, res) => {
 exports.forgotPassword = (req, res) => {
   try {
     const { user_id } = req;
+    console.log(user_id)
 
     // Validate the request parameters
     const errors = validationResult(req);
