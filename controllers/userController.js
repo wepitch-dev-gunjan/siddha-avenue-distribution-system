@@ -135,21 +135,24 @@ exports.forgotPassword = (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, role, parent, password } = req.body;
+    const { name, email, role, parents, password } = req.body;
 
+    console.log(name, email, role, parents, password);
     // Check if the user already exists
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    const parentsIds = parents.map(parent => parent._id);
+
     const hashedPassword = await bcrypt.hash(password, 10);
     // Create a new user instance
     user = new User({
       name,
       email,
-      role,
-      parent,
+      role: role._id,
+      parents: parentsIds,
       password: hashedPassword,
     });
 
@@ -309,6 +312,34 @@ exports.getChildren = async (req, res) => {
       .json({ error: "Internal Server Error", message: error.message });
   }
 };
+
+exports.getParents = async (req, res) => {
+  try {
+    const rolesParam = req.query.roles;
+
+    // Check if rolesParam is not provided or not a string
+    if (!rolesParam || typeof rolesParam !== 'string') {
+      return res.status(400).send({
+        error: "roles must be provided as a comma-separated string"
+      });
+    }
+
+    // Convert the string to an array of role IDs
+    const roleIds = rolesParam.split(',').map(roleId => JSON.stringify(roleId));
+    
+
+    // Assuming User is a model representing your users
+    const parents = await User.find({ role: { $in: roleIds } });
+
+    res.status(200).send(parents);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      error: "Internal server error"
+    });
+  }
+};
+
 
 exports.generateOtpByPhone = async (req, res) => {
   try {

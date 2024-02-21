@@ -8,18 +8,20 @@ const {
   getChildren,
   forgotPassword,
   resetPassword,
+  getParents,
 } = require("../controllers/userController");
 const { userAuth, adminAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
 
 router.get("/user", userAuth, adminAuth, getUsers);
 router.get("/user/children", getChildren);
+router.get("/user/parents", getParents);
 router.get("/user/profile", userAuth, getUser);
 router.post("/user/register", register);
 router.post("/user/forgotPassword", forgotPassword);
-router.post("/user/:user_id/resetPassword", userAuth, resetPassword);
+router.post("/user/resetPassword", resetPassword);
 
 router.put("/user", userAuth, editProfile);
-router.get("/login", login);
+router.post("/login", login);
 
 module.exports = router;
