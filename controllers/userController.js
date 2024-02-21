@@ -39,24 +39,31 @@ exports.resetPassword = async (req, res) => {
   // Update the user's password
 };
 
-exports.forgotPassword = (req, res) => {
+exports.forgotPassword = async (req, res) => {
   try {
-    const { user_id } = req;
-    console.log(user_id);
+    const { email } = req.body;
+    console.log(email);
 
+    if(!email) return res.status(400).send({
+      message: "Email is required"
+    });
+
+    const user = await User.findOne({ email });
+    if(!user) return res.status(404).send({
+      message: "User not found"
+    });
     // Validate the request parameters
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const token = jwt.sign({ user_id }, JWT_SECRET);
+    const token = jwt.sign({ user_id: user._id }, JWT_SECRET);
 
     const link = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-    const { to } = req.body;
 
     const mailOptions = {
-      to,
+      to: email,
       subject: "Reset Password",
       html: `
       <body>
@@ -104,7 +111,7 @@ exports.forgotPassword = (req, res) => {
                         color: #333;
                       "
                     >
-                      Dear ${to},<br /><br />
+                      Dear ${user.name},<br /><br />
                       <!-- You can insert the OTP dynamically here -->
                       Your link to reset your password is: 
                       <a href=${link} >Click Here</a><br/><br/>
