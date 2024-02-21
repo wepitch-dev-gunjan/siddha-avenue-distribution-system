@@ -18,7 +18,7 @@ router.get("/user/children", getChildren);
 router.get("/user/parents", getParents);
 router.get("/user/profile", userAuth, getUser);
 router.post("/user/register", register);
-router.post("/user/forgotPassword", forgotPassword);
+router.post("/user/forgotPassword", userAuth, forgotPassword);
 router.post("/user/resetPassword", resetPassword);
 
 router.put("/user", userAuth, editProfile);

@@ -27,6 +27,7 @@ exports.resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     const user = await User.findOne({ _id: user_id });
+    if (!user) return res.status(400).json({ error: "User does not exist" });
     user.password = hashedPassword;
     await user.save();
     res.json({ message: "Password updated successfully" });
@@ -41,7 +42,7 @@ exports.resetPassword = async (req, res) => {
 exports.forgotPassword = (req, res) => {
   try {
     const { user_id } = req;
-    console.log(user_id)
+    console.log(user_id);
 
     // Validate the request parameters
     const errors = validationResult(req);
@@ -145,7 +146,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const parentsIds = parents.map(parent => parent._id);
+    const parentsIds = parents.map((parent) => parent._id);
 
     const hashedPassword = await bcrypt.hash(password, 10);
     // Create a new user instance
@@ -319,15 +320,16 @@ exports.getParents = async (req, res) => {
     const rolesParam = req.query.roles;
 
     // Check if rolesParam is not provided or not a string
-    if (!rolesParam || typeof rolesParam !== 'string') {
+    if (!rolesParam || typeof rolesParam !== "string") {
       return res.status(400).send({
-        error: "roles must be provided as a comma-separated string"
+        error: "roles must be provided as a comma-separated string",
       });
     }
 
     // Convert the string to an array of role IDs
-    const roleIds = rolesParam.split(',').map(roleId => JSON.stringify(roleId));
-    
+    const roleIds = rolesParam
+      .split(",")
+      .map((roleId) => JSON.stringify(roleId));
 
     // Assuming User is a model representing your users
     const parents = await User.find({ role: { $in: roleIds } });
@@ -336,11 +338,10 @@ exports.getParents = async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).send({
-      error: "Internal server error"
+      error: "Internal server error",
     });
   }
 };
-
 
 exports.generateOtpByPhone = async (req, res) => {
   try {
