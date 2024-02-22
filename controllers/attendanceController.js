@@ -9,6 +9,7 @@ exports.punchIn = async (req, res) => {
     // Validations
     if (!location || typeof location !== 'object' || !address) {
       return res.status(400).json({ error: 'Invalid location or address provided' });
+      
     }
 
     // Check if the user already has an active attendance (punch_in without punch_out)
