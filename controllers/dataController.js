@@ -10,6 +10,7 @@ exports.uploadData = async (req, res) => {
 
     // Parse CSV file
     const results = [];
+    console.log(req.file);
     // Convert buffer to Readable stream
     const stream = new Readable();
     stream.push(req.file.buffer);
