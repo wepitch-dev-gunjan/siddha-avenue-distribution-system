@@ -25,6 +25,8 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.9",
     "stream": "^0.0.2",
-    "telesignsdk": "^2.2.3"
+    "telesignsdk": "^2.2.3",
+    "xlsx": "^0.18.5",
+    "xslx": "^1.0.0"
   }
 }

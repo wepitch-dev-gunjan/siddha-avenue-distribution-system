@@ -44,14 +44,16 @@ exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
     console.log(email);
 
-    if(!email) return res.status(400).send({
-      message: "Email is required"
-    });
+    if (!email)
+      return res.status(400).send({
+        message: "Email is required",
+      });
 
     const user = await User.findOne({ email });
-    if(!user) return res.status(404).send({
-      message: "User not found"
-    });
+    if (!user)
+      return res.status(404).send({
+        message: "User not found",
+      });
     // Validate the request parameters
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -192,6 +194,8 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    console.log(email);
 
     // Find the user by email
     const user = await User.findOne({ email });
