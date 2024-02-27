@@ -7,6 +7,7 @@ exports.punchIn = async (req, res) => {
     const { location, address } = req.body;
 
     // Validations
+    console.log(address);
     if (!location || typeof location !== 'object' || !address) {
       return res.status(400).json({ error: 'Invalid location or address provided' });
       

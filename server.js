@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const { readdirSync } = require("fs");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 require("dotenv").config();
 
 const app = express();
@@ -28,6 +29,16 @@ app.use(
     // origin: ['https://counsellor.sortmycollege.com', 'http://localhost:3000'],
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true,
+  })
+);
+app.use(
+  "/api",
+  createProxyMiddleware({
+    target: "http://localhost:3000",
+    changeOrigin: true, // Required for virtual hosted sites
+    pathRewrite: {
+      "^/api": "", // Remove '/api' from the beginning of the URL
+    },
   })
 );
 
