@@ -41,6 +41,7 @@ app.use('/api', createProxyMiddleware({
 mongoose.connect(MONGODB_URI);
 
 mongoose.connection.on("connected", () => {
+  
   console.log("Database is connected");
 });
 
