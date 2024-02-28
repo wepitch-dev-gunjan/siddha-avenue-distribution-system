@@ -224,6 +224,7 @@ exports.login = async (req, res) => {
   }
 };
 
+
 exports.getUser = async (req, res) => {
   try {
     const { user_id } = req;
@@ -244,6 +245,7 @@ exports.getUser = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+//abc
 
 exports.editProfile = async (req, res) => {
   try {
