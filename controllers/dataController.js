@@ -52,3 +52,34 @@ exports.uploadData = async (req, res) => {
     res.status(500).send("Internal server error");
   }
 };
+
+exports.getData = async (req, res) => {
+  try {
+    const { search } = req.query;
+    console.log(search);
+    let query = {};
+    if (search) {
+      const dataKeys = await Data.find().select("-_id").lean().exec(); // Get all keys from existing data
+      const fields = dataKeys.map((obj) => Object.keys(obj)).flat(); // Flatten all keys
+
+      // Remove duplicates from the fields array
+      const uniqueFields = [...new Set(fields)].filter((data) => data != "__v");
+      console.log(uniqueFields);
+
+      query = {
+        $or: uniqueFields.map((field) => ({
+          [field]: {
+            $regex: search,
+            $options: "i", // Case-insensitive search
+          },
+        })),
+      };
+    }
+    const data = await Data.find(query);
+    if (!data) return res.status(404).send({ error: "Data not found" });
+    res.send(data);
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
