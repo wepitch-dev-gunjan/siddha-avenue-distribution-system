@@ -197,21 +197,17 @@ exports.login = async (req, res) => {
     if(!email || !password) return res.status(404).send({
       error: "Credentials are required"
     })
-
     console.log("jkjkhkjh");
-
     // Find the user by email
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-
     // Check if the password is correct
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-
     // Successful login
     const token = jwt.sign(
       { user_id: user._id, name: user.name, phone_number: user.phone_number },
