@@ -1,6 +1,6 @@
 const { Schema, model } = require("mongoose");
 
-const dataSchema = new Schema(
+const salesDataSchema = new Schema(
   {},
   {
     strict: false,
@@ -9,4 +9,4 @@ const dataSchema = new Schema(
 
 // const Data = mongoose.model("Data", dataSchema);
 
-module.exports = model("Data", dataSchema);
+module.exports = model("SalesData", salesDataSchema);

@@ -2,7 +2,7 @@
   "workbench.preferredHighContrastLightColorTheme": "Default Light Modern",
   "workbench.preferredLightColorTheme": "Visual Studio Light",
   "workbench.iconTheme": "material-icon-theme",
-  "workbench.colorTheme": "Darcula Theme from IntelliJ",
+  "workbench.colorTheme": "Nord",
   "workbench.preferredDarkColorTheme": "Default Dark Modern",
   "editor.formatOnSave": true,
   "diffEditor.codeLens": true,

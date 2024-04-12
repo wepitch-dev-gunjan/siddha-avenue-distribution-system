@@ -1,10 +1,10 @@
 const express = require("express");
-const { uploadData, getData } = require("../controllers/dataController");
+const { uploadSalesData, getSalesData } = require("../controllers/salesDataController");
 const { upload } = require("../services/fileUpload");
 const { userAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
 
-router.post("/upload", userAuth, upload.single("file"), uploadData);
-router.get("/upload", userAuth, getData);
+router.post("/sales", upload.single("file"), uploadSalesData);
+router.get("/sales", getSalesData);
 
 module.exports = router;
