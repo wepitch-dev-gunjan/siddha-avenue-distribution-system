@@ -3,7 +3,7 @@ const { Readable } = require("stream");
 const xlsx = require("xlsx");
 const Data = require("../models/SalesData");
 const SalesData = require("../models/SalesData");
-const { getLastDaysOfPreviousMonths } = require("../helpers/salesHelpers");
+const { getLastDaysOfPreviousMonths, channelOrder } = require("../helpers/salesHelpers");
 
 exports.uploadSalesData = async (req, res) => {
   try {
@@ -91,7 +91,8 @@ exports.getSalesData = async (req, res) => {
             DATE: {
               $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
               $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            }
+            },
+            "SALES TYPE": "Sell Out"
           }
         },
         // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
@@ -151,6 +152,27 @@ exports.getSalesData = async (req, res) => {
         }
       ]);
 
+      salesStats.sort((a, b) => {
+        // Get the index of each channel in the channelOrder array
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+
+        // Compare the indices to determine the sorting order
+        if (indexA === -1 && indexB === -1) {
+          // If both channels are not found in channelOrder, maintain their original order
+          return 0;
+        } else if (indexA === -1) {
+          // If only channel A is not found in channelOrder, place it after channel B
+          return 1;
+        } else if (indexB === -1) {
+          // If only channel B is not found in channelOrder, place it before channel A
+          return -1;
+        } else {
+          // If both channels are found in channelOrder, sort based on their indices
+          return indexA - indexB;
+        }
+      });
+
       if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
       res.status(200).send(salesStats);
     }
@@ -162,7 +184,8 @@ exports.getSalesData = async (req, res) => {
             DATE: {
               $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
               $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            }
+            },
+            "SALES TYPE": "Sell Out"
           }
         },
         // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
@@ -216,12 +239,29 @@ exports.getSalesData = async (req, res) => {
               }
             }
           }
-        },
-        {
-          $sort: { "Contribution": -1 }
         }
-      ]
-      );
+      ]);
+
+      salesStats.sort((a, b) => {
+        // Get the index of each channel in the channelOrder array
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+
+        // Compare the indices to determine the sorting order
+        if (indexA === -1 && indexB === -1) {
+          // If both channels are not found in channelOrder, maintain their original order
+          return 0;
+        } else if (indexA === -1) {
+          // If only channel A is not found in channelOrder, place it after channel B
+          return 1;
+        } else if (indexB === -1) {
+          // If only channel B is not found in channelOrder, place it before channel A
+          return -1;
+        } else {
+          // If both channels are found in channelOrder, sort based on their indices
+          return indexA - indexB;
+        }
+      });
 
       if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
       res.status(200).send(salesStats);
@@ -232,9 +272,10 @@ exports.getSalesData = async (req, res) => {
         {
           $match: {
             DATE: {
-              $gte: `${startYear - 1}-01-01`, // Start of the previous year
-              $lte: `${endYear - 1}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the previous year's current month
-            }
+              $gte: lytdStartDate, // Start of the previous year
+              $lte: lytdEndDate // End of the previous year's current month
+            },
+            "SALES TYPE": "Sell Out"
           }
         },
         {
@@ -319,9 +360,6 @@ exports.getSalesData = async (req, res) => {
               }
             }
           }
-        },
-        {
-          $sort: { "Contribution": -1 }
         }
       ]);
 
@@ -338,6 +376,27 @@ exports.getSalesData = async (req, res) => {
           // If no matching channel is found, set LYTD Sell out to 0
           currentChannel["LYTD Sell out"] = 0;
           currentChannel["%Gwth"] = 0;
+        }
+      });
+
+      salesStats.sort((a, b) => {
+        // Get the index of each channel in the channelOrder array
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+
+        // Compare the indices to determine the sorting order
+        if (indexA === -1 && indexB === -1) {
+          // If both channels are not found in channelOrder, maintain their original order
+          return 0;
+        } else if (indexA === -1) {
+          // If only channel A is not found in channelOrder, place it after channel B
+          return 1;
+        } else if (indexB === -1) {
+          // If only channel B is not found in channelOrder, place it before channel A
+          return -1;
+        } else {
+          // If both channels are found in channelOrder, sort based on their indices
+          return indexA - indexB;
         }
       });
 
@@ -438,9 +497,6 @@ exports.getSalesData = async (req, res) => {
               }
             }
           }
-        },
-        {
-          $sort: { "Contribution": -1 }
         }
       ]);
 
@@ -457,6 +513,28 @@ exports.getSalesData = async (req, res) => {
           // If no matching channel is found, set LYTD Sell out to 0
           currentChannel["LYTD Sell out"] = 0;
           currentChannel["%Gwth"] = 0;
+        }
+      });
+
+      // Sorting the salesStats array based on channelOrder
+      salesStats.sort((a, b) => {
+        // Get the index of each channel in the channelOrder array
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+
+        // Compare the indices to determine the sorting order
+        if (indexA === -1 && indexB === -1) {
+          // If both channels are not found in channelOrder, maintain their original order
+          return 0;
+        } else if (indexA === -1) {
+          // If only channel A is not found in channelOrder, place it after channel B
+          return 1;
+        } else if (indexB === -1) {
+          // If only channel B is not found in channelOrder, place it before channel A
+          return -1;
+        } else {
+          // If both channels are found in channelOrder, sort based on their indices
+          return indexA - indexB;
         }
       });
 

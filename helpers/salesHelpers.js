@@ -22,3 +22,7 @@ exports.getLastDaysOfPreviousMonths = () => {
 
   return lastDays;
 }
+
+exports.channelOrder = [
+  'Exclusive', 'PC', 'SCP', 'RRF EXT', 'SIS PRO', 'SIS PLUS', 'STAR DCM', 'DCM'
+]
