@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 const MONGODB_URI =
   process.env.MONGODB_URI ||
-  "mongodb://127.0.0.1:27017/siddha-avenue-distribution-system-db";
+  "mongodb+srv://connectsiddha_staging:TZcQRUKjTY5U99zR@cluster0.5qw8rhx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Parse URL-encoded form data
