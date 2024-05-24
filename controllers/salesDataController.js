@@ -1636,16 +1636,24 @@ exports.getSalesDashboardData = async (req, res) => {
       };
     }
 
-    // Calculate the start and end dates for LYTD
-    const lytdStartDate = `${startYear - 1}-01-01`; // January 1st of the previous year
-    const lytdEndDate = `${startYear - 1}-${startMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`; // End of the current month for the previous year
+    const lytdStartDate = `${startYear - 1}-01-01`;
+    const lytdEndDate = `${startYear - 1}-${startMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`;
 
     let result = {};
+
+    const formatNumber = (num) => {
+      if (num >= 1e6) {
+        return (num / 1e6).toFixed(2) + 'M';
+      }
+      if (num >= 1e3) {
+        return (num / 1e3).toFixed(2) + 'K';
+      }
+      return num.toString();
+    };
+
     if (td_format === 'MTD' && data_format === 'value') {
       const salesStats = await SalesData.aggregate([
-        {
-          $match: matchStage
-        },
+        { $match: matchStage },
         {
           $group: {
             _id: "$SALES TYPE",
@@ -1675,25 +1683,23 @@ exports.getSalesDashboardData = async (req, res) => {
         }
       ]);
 
-      // Populate the result object
       salesStats.forEach(item => {
         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
-          result.mtd_sell_in_value = item.MTD_Value;
-          result.lmtd_sell_in_value = item.LMTD_Value;
-          result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) : "N/A";
+          result.mtd_sell_in_value = formatNumber(item.MTD_Value);
+          result.lmtd_sell_in_value = formatNumber(item.LMTD_Value);
+          result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         } else if (item.salesType === "Sell Out") {
-          result.mtd_sell_out_value = item.MTD_Value;
-          result.lmtd_sell_out_value = item.LMTD_Value;
-          result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) : "N/A";
+          result.mtd_sell_out_value = formatNumber(item.MTD_Value);
+          result.lmtd_sell_out_value = formatNumber(item.LMTD_Value);
+          result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         }
       });
 
     }
+
     if (td_format === 'MTD' && data_format === 'volume') {
       const salesStats = await SalesData.aggregate([
-        {
-          $match: matchStage
-        },
+        { $match: matchStage },
         {
           $group: {
             _id: "$SALES TYPE",
@@ -1723,24 +1729,25 @@ exports.getSalesDashboardData = async (req, res) => {
         }
       ]);
 
-      // Populate the result object
       salesStats.forEach(item => {
         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
-          result.mtd_sell_in_volume = item.MTD_Volume;
-          result.lmtd_sell_in_volume = item.LMTD_Volume;
-          result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) : "N/A";
+          result.mtd_sell_in_volume = formatNumber(item.MTD_Volume);
+          result.lmtd_sell_in_volume = formatNumber(item.LMTD_Volume);
+          result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         } else if (item.salesType === "Sell Out") {
-          result.mtd_sell_out_volume = item.MTD_Volume;
-          result.lmtd_sell_out_volume = item.LMTD_Volume;
-          result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) : "N/A";
+          result.mtd_sell_out_volume = formatNumber(item.MTD_Volume);
+          result.lmtd_sell_out_volume = formatNumber(item.LMTD_Volume);
+          result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         }
       });
 
     }
+
     res.status(200).send(result);
   } catch (error) {
     console.log(error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
+
 
