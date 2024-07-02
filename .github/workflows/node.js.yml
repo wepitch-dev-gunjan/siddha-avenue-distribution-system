@@ -18,13 +18,13 @@ jobs:
         with:
           node-version: 20.x
 
-      # Install PM2 globally
+      # Install PM2 globally using full path to npm
       - name: Install PM2
-        run: sudo npm install pm2 -g
+        run: sudo /usr/local/bin/npm install pm2 -g
 
       # Stop all instances of PM2 (run as root)
       - name: Stop all instances of PM2
-        run: sudo pm2 delete all || true
+        run: sudo /usr/local/bin/pm2 delete all || true
 
       # Install project dependencies
       - name: Install dependencies
@@ -36,4 +36,4 @@ jobs:
 
       # Start Node.js application using PM2 (run as root)
       - name: Start Node.js application
-        run: sudo pm2 start server.js --name="server" -f
+        run: sudo /usr/local/bin/pm2 start server.js --name="server" -f
