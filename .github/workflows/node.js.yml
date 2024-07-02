@@ -24,7 +24,7 @@ jobs:
 
       # Stop all instances of PM2
       - name: Stop all instances of PM2
-        run: pm2 delete all || true
+        run: sudo pm2 delete all || true
 
       # Install project dependencies
       - name: Install dependencies
@@ -38,4 +38,4 @@ jobs:
 
       # Start Node.js applications using PM2
       - name: Start Node.js application
-        run: pm2 start server.js --name="server" -f
+        run: sudo pm2 start server.js --name="server" -f
