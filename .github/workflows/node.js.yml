@@ -33,6 +33,7 @@ jobs:
       # Create environment variables for each service
       - name: Create environment variables
         run: |
+          touch .env
           echo "${{ secrets.PROD_ENV }}" > .env
 
       # Start Node.js applications using PM2
