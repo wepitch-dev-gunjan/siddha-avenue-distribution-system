@@ -847,6 +847,7 @@ exports.getSalesDataSegmentWise = async (req, res) => {
             "Price Band": "$segmentsData._id",
             "LMTD": "$segmentsData.LMTD",
             "MTD": "$segmentsData.MTD",
+
             "%Gwth": {
               $cond: {
                 if: { $eq: ["$segmentsData.LMTD", 0] },
