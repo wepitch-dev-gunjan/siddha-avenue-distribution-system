@@ -41,7 +41,9 @@ exports.uploadSalesData = async (req, res) => {
       try {
         // Insert data into MongoDB
         await SalesData.insertMany(results);
-        res.status(200).send("Data inserted into database");
+        res.status(200).send({
+          message: "Data inserted successfully"
+        });
       } catch (error) {
         console.log(error);
         res.status(500).send("Error inserting data into database");
