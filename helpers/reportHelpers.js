@@ -1,0 +1,70 @@
+function filterSalesData(data, filterType, timePeriod) {
+    // Implement your filter logic here based on filterType (Value/Volume) and timePeriod (MTD/YTD)
+    return data.filter(row => {
+      // Example filter logic
+      if (filterType === 'Value' && timePeriod === 'MTD') {
+        return row['MTD VALUE'] > 0;
+      } else if (filterType === 'Volume' && timePeriod === 'YTD') {
+        return row['YTD VOLUME'] > 0;
+      }
+      // Add more conditions as required
+      return true;
+    });
+  }
+
+function generateSegmentWiseReport(data) {
+    // Implement your report generation logic here
+    return data.map(row => ({
+      priceBand: row['PRICE BAND'],
+      contribution: calculateContribution(row),
+      valueTarget: row['TARGET'],
+      mtd: row['MTD VOLUME'],
+      mtdAch: row['ACHIEVEMENT'],
+      lmtd: row['LMTD VOLUME'],
+      pendingVal: calculatePendingValue(row),
+      extrapolated: calculateExtrapolated(row),
+      growth: calculateGrowth(row),
+      lmAds: row['LM ADS'],
+      cmAds: row['CM ADS'],
+      reqAds: calculateRequiredAds(row),
+      d1: row['D-1'],
+      ftd: row['FTD'],
+    }));
+  }
+
+function calculateContribution(row) {
+    // Implement your calculation logic for % contribution
+    return (row['MTD VALUE'] / row['TARGET']) * 100; // Example calculation
+  }
+  
+  function calculatePendingValue(row) {
+    // Implement your calculation logic for pending value
+    return row['TARGET'] - row['MTD VALUE']; // Example calculation
+  }
+  
+  function calculateExtrapolated(row) {
+    // Implement your calculation logic for % extrapolated
+    return (row['MTD VALUE'] / row['LMTD VALUE']) * 100; // Example calculation
+  }
+  
+  function calculateGrowth(row) {
+    // Implement your calculation logic for growth
+    return ((row['MTD VALUE'] - row['LMTD VALUE']) / row['LMTD VALUE']) * 100; // Example calculation
+  }
+  
+  function calculateRequiredAds(row) {
+    // Implement your calculation logic for required ADS
+    return row['TARGET'] / 30; // Example calculation
+  }
+
+  function categorizePriceBand(price) {
+    if (price > 100000) return '>100K';
+    if (price > 70000) return '70-100K';
+    if (price > 40000) return '40-70K';
+    if (price > 30000) return '30-40K';
+    if (price > 20000) return '20-30K';
+    if (price > 15000) return '15-20K';
+    if (price > 10000) return '10-15K';
+    if (price > 6000) return '6-10K';
+    return '6-10K'; // Default to the lowest range for prices <= 6000
+  }

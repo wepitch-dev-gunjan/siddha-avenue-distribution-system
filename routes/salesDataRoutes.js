@@ -1,5 +1,5 @@
 const express = require("express");
-const { uploadSalesData, getSalesDataChannelWise, getSalesDataSegmentWise, getSalesDataTSEWise, getSalesDashboardData } = require("../controllers/salesDataController");
+const { uploadSalesData, getSalesDataChannelWise, getSalesDataSegmentWise, getSalesDataTSEWise, getSalesDashboardData, getChannelSalesDataAreaWise, getSalesDataABMWise } = require("../controllers/salesDataController");
 const { upload } = require("../services/fileUpload");
 const { userAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
@@ -9,5 +9,7 @@ router.get("/sales/dashboard", getSalesDashboardData);
 router.get("/sales/channel-wise", getSalesDataChannelWise);
 router.get("/sales/segment-wise", getSalesDataSegmentWise);
 router.get("/sales/tse-wise", getSalesDataTSEWise);
+router.get("/sales/channel/area-wise", getChannelSalesDataAreaWise)
+router.get("/sales/abm-wise", getSalesDataABMWise)
 
 module.exports = router;

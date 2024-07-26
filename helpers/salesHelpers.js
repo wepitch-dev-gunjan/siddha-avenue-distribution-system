@@ -44,3 +44,23 @@ exports.segmentOrder = [
   'STAR DCM',
   '< 6 K',
 ]
+
+// Function to get the start of the month
+exports.getStartOfMonth = (date) => {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+};
+
+// Function to get the start and end dates for the same period last month
+exports.getLastMonthPeriod = (date) => {
+  const lastMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+  const daysElapsed = date.getDate();
+  const start = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+  const end = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), daysElapsed);
+  return { start, end };
+};
+
+// Function to calculate the target based on previous performance
+exports.calculateTarget = (lmtVolume, growthFactor = 0.10) => {
+  const baseTarget = lmtVolume ? parseInt(lmtVolume, 10) : 10; // Default to 10 if LMT_VOLUME is 0 or not available
+  return Math.ceil(baseTarget * (1 + growthFactor));
+};

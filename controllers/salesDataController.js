@@ -3,7 +3,18 @@ const { Readable } = require("stream");
 const xlsx = require("xlsx");
 const Data = require("../models/SalesData");
 const SalesData = require("../models/SalesData");
-const { getLastDaysOfPreviousMonths, channelOrder } = require("../helpers/salesHelpers");
+const { getLastDaysOfPreviousMonths, channelOrder, getDaysElapsedInMonth, getDaysRemainingInMonth, getDaysElapsedInRange, getDaysRemainingInMonthFromDate, calculateTarget, getStartOfMonth, getLastMonthPeriod  } = require("../helpers/salesHelpers");
+const {
+  filterSalesData,
+  generateSegmentWiseReport,
+  calculateContribution,
+  calculatePendingValue,
+  calculateExtrapolated,
+  calculateGrowth,
+  calculateRequiredAds,
+  categorizePriceBand
+} = require('../helpers/reportHelpers');
+
 
 exports.uploadSalesData = async (req, res) => {
   try {
@@ -290,568 +301,6 @@ exports.getSalesDataChannelWise = async (req, res) => {
   }
 };
 
-
-exports.getSalesDataSegmentWise = async (req, res) => {
-  try {
-    let { td_format, start_date, end_date, data_format } = req.query;
-    let startDate, startYear, startMonth, endDate, endMonth, endYear;
-
-    if (!td_format) td_format = 'MTD'
-    if (start_date) {
-      startDate = new Date(start_date);
-    } else {
-      startDate = new Date();
-    }
-    if (end_date) {
-      endDate = new Date(end_date);
-    } else {
-      endDate = new Date();
-    }
-    if (!data_format) data_format = "value"
-
-    startYear = startDate.getFullYear();
-    startMonth = startDate.getMonth() + 1; // Month is zero-based
-    endYear = endDate.getFullYear();
-    endMonth = endDate.getMonth() + 1; // Month is zero-based
-
-    const presentDayOfMonth = endDate.getDate();
-
-    // Calculate the start and end dates for LYTD
-    const lytdStartDate = `${startYear - 1}-01-01`; // January 1st of the previous year
-    const lytdEndDate = `${startYear - 1}-${startMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`; // End of the current month for the previous year
-
-    if (td_format === 'MTD' && data_format === 'value') {
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            },
-            "SALES TYPE": "Sell Out"
-          }
-        },
-        // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
-        {
-          $group: {
-            _id: "$PRICE BAND",
-            "LMTD": { $sum: { $toInt: "$LMTD VALUE" } },
-            "MTD": { $sum: { $toInt: "$MTD VALUE" } }
-          }
-        },
-        // Stage 2: Calculate total MTD Sell out
-        {
-          $group: {
-            _id: null,
-            totalMTDSellOut: { $sum: "$MTD VALUE" },
-            segmentsData: { $push: "$$ROOT" }
-          }
-        },
-        // Stage 3: Unwind the array to access grouped data
-        {
-          $unwind: "$segmentsData"
-        },
-        // Stage 4: Calculate %Gwth (percentage growth) and Contribution
-        {
-          $project: {
-            "Price Band": "$segmentsData._id",
-            "LMTD": "$segmentsData.LMTD",
-            "MTD": "$segmentsData.MTD",
-
-            "%Gwth": {
-              $cond: {
-                if: { $eq: ["$segmentsData.LMTD", 0] },
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$segmentsData.MTD", "$segmentsData.LMTD"] }, "$segmentsData.LMTD"] },
-                    100
-                  ]
-                }
-              }
-            },
-            "Contribution": {
-              $cond: {
-                if: { $eq: ["$totalMTDSellOut", 0] }, // Handling zero totalMTDSellOut
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: ["$segmentsData.MTD", "$totalMTDSellOut"] },
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]);
-
-      const ftdSalesStats = await SalesData.aggregate([
-        {
-          $match: {
-            "DATE": `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth - 1}`,
-            "SALES TYPE": "Sell Out"
-          }
-        },
-        // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
-        {
-          $group: {
-            _id: "$PRICE BAND",
-            "FTD": { $sum: { $toInt: "$MTD VALUE" } }
-          }
-        }
-      ]);
-
-      const adsSalesStats = await SalesData.aggregate([
-        {
-          $match: {
-            "DATE": {
-              $gte: `${endYear}-${endMonth.toString().padStart(2, '0')}-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            },
-            "SALES TYPE": "Sell Out"
-          }
-        },
-        // Stage 1: Group by PRICE BAND and calculate MTD Sell out
-        {
-          $group: {
-            _id: "$PRICE BAND",
-            "totalMTDValue": { $sum: { $toInt: "$MTD VALUE" } }, // Calculate total MTD VALUE for each PRICE BAND
-            "count": { $sum: 1 } // Count the number of documents in each group
-          }
-        },
-        // Stage 2: Calculate average MTD VALUE for each PRICE BAND
-        {
-          $project: {
-            "ADS": { $divide: ["$totalMTDValue", "$count"] } // Calculate average MTD VALUE
-          }
-        }
-      ]);
-
-
-      salesStats.sort((a, b) => {
-        // Get the index of each channel in the channelOrder array
-        const indexA = channelOrder.indexOf(a.Channel);
-        const indexB = channelOrder.indexOf(b.Channel);
-
-        // Compare the indices to determine the sorting order
-        if (indexA === -1 && indexB === -1) {
-          // If both channels are not found in channelOrder, maintain their original order
-          return 0;
-        } else if (indexA === -1) {
-          // If only channel A is not found in channelOrder, place it after channel B
-          return 1;
-        } else if (indexB === -1) {
-          // If only channel B is not found in channelOrder, place it before channel A
-          return -1;
-        }
-        // If both channels are found in channelOrder, sort based on their indices
-        return indexA - indexB;
-
-      });
-
-      salesStats.forEach(currentSegment => {
-        // Find the corresponding channel in lastYearSalesStats array
-        const matchingSegment = ftdSalesStats.find(segment => segment._id === currentSegment['Price Band']);
-
-        // If a matching channel is found, merge LYTD Sell out into the currentChannel object
-        if (matchingSegment) {
-          currentSegment['FTD'] = matchingSegment.FTD;
-        } else {
-          // If no matching channel is found, set LYTD Sell out to 0
-          currentSegment['FTD'] = 0;
-        }
-      });
-
-      salesStats.forEach(currentSegment => {
-        // Find the corresponding channel in lastYearSalesStats array
-        const matchingSegment = adsSalesStats.find(segment => segment._id === currentSegment['Price Band']);
-        console.log(matchingSegment)
-
-        // If a matching channel is found, merge LYTD Sell out into the currentChannel object
-        if (matchingSegment) {
-          currentSegment['ADS'] = matchingSegment.ADS;
-        } else {
-          // If no matching channel is found, set LYTD Sell out to 0
-          currentSegment['ADS'] = 0;
-        }
-      });
-
-      if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
-      res.status(200).send(salesStats);
-    }
-
-    if (td_format === 'MTD' && data_format === 'volume') {
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            },
-            "SALES TYPE": "Sell Out"
-          }
-        },
-        // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
-        {
-          $group: {
-            _id: "$CHANNEL",
-            "MTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } },
-            "LMTD VOLUME": { $sum: { $toInt: "$LMTD VOLUME" } },
-          }
-        },
-        // Stage 2: Calculate total MTD Sell out
-        {
-          $group: {
-            _id: null,
-            totalMTDSellOut: { $sum: "$MTD VOLUME" },
-            channelsData: { $push: "$$ROOT" } // Preserve grouped data for further processing
-          }
-        },
-        // Stage 3: Unwind the array to access grouped data
-        {
-          $unwind: "$channelsData"
-        },
-        // Stage 4: Calculate %Gwth (percentage growth) and Contribution
-        {
-          $project: {
-            "Channel": "$channelsData._id",
-            "MTD Sell out": "$channelsData.MTD VOLUME",
-            "LMTD Sell out": "$channelsData.LMTD VOLUME",
-            "%Gwth": {
-              $cond: {
-                if: { $eq: ["$channelsData.LMTD VOLUME", 0] },
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$channelsData.MTD VOLUME", "$channelsData.LMTD VOLUME"] }, "$channelsData.LMTD VOLUME"] },
-                    100
-                  ]
-                }
-              }
-            },
-            "Contribution": {
-              $cond: {
-                if: { $eq: ["$totalMTDSellOut", 0] }, // Handling zero totalMTDSellOut
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: ["$channelsData.MTD VOLUME", "$totalMTDSellOut"] },
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]);
-
-      salesStats.sort((a, b) => {
-        // Get the index of each channel in the channelOrder array
-        const indexA = channelOrder.indexOf(a.Channel);
-        const indexB = channelOrder.indexOf(b.Channel);
-
-        // Compare the indices to determine the sorting order
-        if (indexA === -1 && indexB === -1) {
-          // If both channels are not found in channelOrder, maintain their original order
-          return 0;
-        } else if (indexA === -1) {
-          // If only channel A is not found in channelOrder, place it after channel B
-          return 1;
-        } else if (indexB === -1) {
-          // If only channel B is not found in channelOrder, place it before channel A
-          return -1;
-        } else {
-          // If both channels are found in channelOrder, sort based on their indices
-          return indexA - indexB;
-        }
-      });
-
-      if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
-      res.status(200).send(salesStats);
-    }
-
-    if (td_format === 'YTD' && data_format === 'value') {
-      const lastYearSalesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: lytdStartDate, // Start of the previous year
-              $lte: lytdEndDate // End of the previous year's current month
-            },
-            "SALES TYPE": "Sell Out"
-          }
-        },
-        {
-          $group: {
-            _id: "$CHANNEL",
-            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalLYTDSellOut: { $sum: "$YTD VALUE" },
-            channelsData: { $push: "$$ROOT" } // Preserve grouped data for further processing
-          }
-        },
-        {
-          $unwind: "$channelsData"
-        },
-        {
-          $project: {
-            "Channel": "$channelsData._id",
-            "LYTD Sell out": "$channelsData.YTD VALUE"
-          }
-        }
-      ]);
-
-      const lastDays = getLastDaysOfPreviousMonths()
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-01-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            }
-          }
-        },
-        {
-          $group: {
-            _id: "$CHANNEL",
-            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
-          }
-        },
-        // Stage 2: Calculate total MTD Sell out
-        {
-          $group: {
-            _id: null,
-            totalYTDSellOut: { $sum: "$YTD VALUE" },
-            channelsData: { $push: "$$ROOT" } // Preserve grouped data for further processing
-          }
-        },
-        // Stage 3: Unwind the array to access grouped data
-        {
-          $unwind: "$channelsData"
-        },
-        // Stage 4: Calculate %Gwth (percentage growth) and Contribution
-        {
-          $project: {
-            "Channel": "$channelsData._id",
-            "YTD Sell out": "$channelsData.YTD VALUE",
-            "%Gwth": {
-              $cond: {
-                if: { $eq: ["$channelsData.LYTD VALUE", 0] },
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$channelsData.YTD VALUE", "$channelsData.LYTD VALUE"] }, "$channelsData.LYTD VALUE"] },
-                    100
-                  ]
-                }
-              }
-            },
-            "Contribution": {
-              $cond: {
-                if: { $eq: ["$totalYTDSellOut", 0] }, // Handling zero totalMTDSellOut
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: ["$channelsData.YTD VALUE", "$totalYTDSellOut"] },
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]);
-
-      // Loop through each element in salesStats array
-      salesStats.forEach(currentChannel => {
-        // Find the corresponding channel in lastYearSalesStats array
-        const matchingChannel = lastYearSalesStats.find(channel => channel.Channel === currentChannel.Channel);
-
-        // If a matching channel is found, merge LYTD Sell out into the currentChannel object
-        if (matchingChannel) {
-          currentChannel["LYTD Sell out"] = matchingChannel["LYTD Sell out"];
-          currentChannel["%Gwth"] = parseInt(currentChannel["YTD Sell out"]) / parseInt(matchingChannel["LYTD Sell out"]) * 100;
-        } else {
-          // If no matching channel is found, set LYTD Sell out to 0
-          currentChannel["LYTD Sell out"] = 0;
-          currentChannel["%Gwth"] = 0;
-        }
-      });
-
-      salesStats.sort((a, b) => {
-        // Get the index of each channel in the channelOrder array
-        const indexA = channelOrder.indexOf(a.Channel);
-        const indexB = channelOrder.indexOf(b.Channel);
-
-        // Compare the indices to determine the sorting order
-        if (indexA === -1 && indexB === -1) {
-          // If both channels are not found in channelOrder, maintain their original order
-          return 0;
-        } else if (indexA === -1) {
-          // If only channel A is not found in channelOrder, place it after channel B
-          return 1;
-        } else if (indexB === -1) {
-          // If only channel B is not found in channelOrder, place it before channel A
-          return -1;
-        } else {
-          // If both channels are found in channelOrder, sort based on their indices
-          return indexA - indexB;
-        }
-      });
-
-      // Now, salesStats array contains LYTD Sell out for each channel
-      if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
-      res.status(200).send(salesStats);
-    }
-
-    if (td_format === 'YTD' && data_format === 'volume') {
-      const lastYearSalesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear - 1}-01-01`, // Start of the previous year
-              $lte: `${endYear - 1}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the previous year's current month
-            }
-          }
-        },
-        {
-          $group: {
-            _id: "$CHANNEL",
-            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalLYTDSellOut: { $sum: "$YTD VOLUME" },
-            channelsData: { $push: "$$ROOT" } // Preserve grouped data for further processing
-          }
-        },
-        {
-          $unwind: "$channelsData"
-        },
-        {
-          $project: {
-            "Channel": "$channelsData._id",
-            "LYTD Sell out": "$channelsData.YTD VOLUME"
-          }
-        }
-      ]);
-
-      const lastDays = getLastDaysOfPreviousMonths()
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-01-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            }
-          }
-        },
-        {
-          $group: {
-            _id: "$CHANNEL",
-            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
-          }
-        },
-        // Stage 2: Calculate total MTD Sell out
-        {
-          $group: {
-            _id: null,
-            totalYTDSellOut: { $sum: "$YTD VOLUME" },
-            channelsData: { $push: "$$ROOT" } // Preserve grouped data for further processing
-          }
-        },
-        // Stage 3: Unwind the array to access grouped data
-        {
-          $unwind: "$channelsData"
-        },
-        // Stage 4: Calculate %Gwth (percentage growth) and Contribution
-        {
-          $project: {
-            "Channel": "$channelsData._id",
-            "YTD Sell out": "$channelsData.YTD VOLUME",
-            "%Gwth": {
-              $cond: {
-                if: { $eq: ["$channelsData.LYTD VOLUME", 0] },
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$channelsData.YTD VOLUME", "$channelsData.LYTD VOLUME"] }, "$channelsData.LYTD VOLUME"] },
-                    100
-                  ]
-                }
-              }
-            },
-            "Contribution": {
-              $cond: {
-                if: { $eq: ["$totalYTDSellOut", 0] }, // Handling zero totalMTDSellOut
-                then: 0,
-                else: {
-                  $multiply: [
-                    { $divide: ["$channelsData.YTD VOLUME", "$totalYTDSellOut"] },
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]);
-
-      // Loop through each element in salesStats array
-      salesStats.forEach(currentChannel => {
-        // Find the corresponding channel in lastYearSalesStats array
-        const matchingChannel = lastYearSalesStats.find(channel => channel.Channel === currentChannel.Channel);
-
-        // If a matching channel is found, merge LYTD Sell out into the currentChannel object
-        if (matchingChannel) {
-          currentChannel["LYTD Sell out"] = matchingChannel["LYTD Sell out"];
-          currentChannel["%Gwth"] = parseInt(currentChannel["YTD Sell out"]) / parseInt(matchingChannel["LYTD Sell out"]) * 100;
-        } else {
-          // If no matching channel is found, set LYTD Sell out to 0
-          currentChannel["LYTD Sell out"] = 0;
-          currentChannel["%Gwth"] = 0;
-        }
-      });
-
-      // Sorting the salesStats array based on channelOrder
-      salesStats.sort((a, b) => {
-        // Get the index of each channel in the channelOrder array
-        const indexA = channelOrder.indexOf(a.Channel);
-        const indexB = channelOrder.indexOf(b.Channel);
-
-        // Compare the indices to determine the sorting order
-        if (indexA === -1 && indexB === -1) {
-          // If both channels are not found in channelOrder, maintain their original order
-          return 0;
-        } else if (indexA === -1) {
-          // If only channel A is not found in channelOrder, place it after channel B
-          return 1;
-        } else if (indexB === -1) {
-          // If only channel B is not found in channelOrder, place it before channel A
-          return -1;
-        }
-        // If both channels are found in channelOrder, sort based on their indices
-        return indexA - indexB;
-
-      });
-
-      // Now, salesStats array contains LYTD Sell out for each channel
-      if (!salesStats || salesStats.length === 0) return res.status(404).send({ error: "Data not found" });
-      res.status(200).send(salesStats);
-    }
-
-  } catch (error) {
-    console.log(error);
-    return res.status(500).send("Internal Server Error");
-  }
-};
 
 exports.getSalesDataTSEWise = async (req, res) => {
   try {
@@ -1652,5 +1101,361 @@ exports.getSalesDashboardData = async (req, res) => {
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
+
+exports.getChannelSalesDataAreaWise = async (req, res) => {
+  try {
+    let { td_format, start_date, end_date, data_format } = req.query;
+
+    // Default values
+    td_format = td_format || 'MTD';
+    data_format = data_format || 'value';
+
+    const startDate = start_date ? new Date(start_date) : new Date();
+    const endDate = end_date ? new Date(end_date) : new Date();
+
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth() + 1; // Month is zero-based
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth() + 1; // Month is zero-based
+
+    const presentDayOfMonth = new Date().getDate();
+
+    const formatValue = (value) => {
+      if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+      if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
+      return value.toString();
+    };
+
+    const processSalesData = (targetField, mtdField, lmtdField) => [
+      {
+        $match: {
+          DATE: {
+            $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
+            $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
+          },
+          "SALES TYPE": "Sell Out"
+        }
+      },
+      {
+        $group: {
+          _id: { channel: "$CHANNEL", area: "$AREA" },
+          [targetField]: { $sum: { $toInt: `$${targetField}` } },
+          [mtdField]: { $sum: { $toInt: `$${mtdField}` } },
+          [lmtdField]: { $sum: { $toInt: `$${lmtdField}` } },
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalMTDSellOut: { $sum: `$${mtdField}` },
+          channelsData: { $push: "$$ROOT" }
+        }
+      },
+      { $unwind: "$channelsData" },
+      {
+        $project: {
+          "Channel": "$channelsData._id.channel",
+          "Area": "$channelsData._id.area",
+          "Last Month ACH": `$channelsData.${lmtdField}`,
+          "Contribution": {
+            $cond: {
+              if: { $eq: ["$totalMTDSellOut", 0] },
+              then: 0,
+              else: {
+                $multiply: [
+                  { $divide: [`$channelsData.${mtdField}`, "$totalMTDSellOut"] },
+                  100
+                ]
+              }
+            }
+          },
+          "TGT": `$channelsData.${targetField}`
+        }
+      },
+      { $sort: { "Contribution": -1 } }
+    ];
+
+    const targetField = data_format === 'value' ? "TARGET VALUE" : "TARGET VOLUME";
+    const mtdField = data_format === 'value' ? "MTD VALUE" : "MTD VOLUME";
+    const lmtdField = data_format === 'value' ? "LMTD VALUE" : "LMTD VOLUME";
+
+    const salesStats = await SalesData.aggregate(processSalesData(targetField, mtdField, lmtdField));
+
+    salesStats.sort((a, b) => {
+      const indexA = channelOrder.indexOf(a.Channel);
+      const indexB = channelOrder.indexOf(b.Channel);
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+
+    const formattedSalesStats = salesStats.map(item => ({
+      ...item,
+      "TGT": formatValue(item["TGT"]),
+      "Last Month ACH": formatValue(item["Last Month ACH"]),
+      "Contribution": `${item["Contribution"].toFixed(2)}%`
+    }));
+
+    if (!formattedSalesStats || formattedSalesStats.length === 0) {
+      return res.status(404).send({ error: "Data not found" });
+    }
+
+    res.status(200).send(formattedSalesStats);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
+
+// Aggregate data for ABM Wise Report
+exports.getSalesDataABMWise = async (req, res) => {
+  try {
+    const { reportDate } = req.query;
+
+    if (!reportDate) {
+      return res.status(400).send("Please provide a reportDate query parameter.");
+    }
+
+    const currentDate = new Date(reportDate);
+    const startOfMonth = getStartOfMonth(currentDate);
+    const { start: startLastMonth, end: endLastMonth } = getLastMonthPeriod(currentDate);
+
+    console.log(`Fetching MTD data from ${startOfMonth} to ${currentDate}`);
+    console.log(`Fetching LMTD data from ${startLastMonth} to ${endLastMonth}`);
+
+    const mtdData = await SalesData.find({
+      DATE: {
+        $gte: startOfMonth.toISOString().split('T')[0],
+        $lte: currentDate.toISOString().split('T')[0]
+      }
+    });
+
+    const lmtdData = await SalesData.find({
+      DATE: {
+        $gte: startLastMonth.toISOString().split('T')[0],
+        $lte: endLastMonth.toISOString().split('T')[0]
+      }
+    });
+
+    console.log(`Found ${mtdData.length} MTD records`);
+    console.log(`Found ${lmtdData.length} LMTD records`);
+
+    if (mtdData.length === 0 && lmtdData.length === 0) {
+      return res.status(200).json([]); // Return empty array if no data found
+    }
+
+    // Group data by ABM for MTD and LMTD
+    const groupedMtdData = mtdData.reduce((acc, record) => {
+      if (!acc[record.ABM]) {
+        acc[record.ABM] = [];
+      }
+      acc[record.ABM].push(record);
+      return acc;
+    }, {});
+
+    const groupedLmtdData = lmtdData.reduce((acc, record) => {
+      if (!acc[record.ABM]) {
+        acc[record.ABM] = [];
+      }
+      acc[record.ABM].push(record);
+      return acc;
+    }, {});
+
+    console.log("Grouped MTD Data: ", JSON.stringify(groupedMtdData, null, 2));
+    console.log("Grouped LMTD Data: ", JSON.stringify(groupedLmtdData, null, 2));
+
+    const report = [];
+
+    for (const abm in groupedMtdData) {
+      const mtdRecords = groupedMtdData[abm];
+      const lmtdRecords = groupedLmtdData[abm] || [];
+
+      let targetVol = 0, mtdVol = 0, lmtdVol = 0, pendingVol = 0;
+      let targetSO = 0, activationMtd = 0, activationLmtd = 0, pendingAct = 0;
+
+      mtdRecords.forEach(record => {
+        const parsedMtdVol = parseInt(record.MTD_VOLUME || "0", 10);
+        const parsedMtdValue = parseFloat(record.MTD_VALUE || "0");
+
+        mtdVol += parsedMtdVol;
+        activationMtd += parsedMtdValue;
+      });
+
+      lmtdRecords.forEach(record => {
+        const parsedLmtdVol = parseInt(record.LMTD_VOLUME || "0", 10);
+        const parsedLmtdValue = parseFloat(record.LMTD_VALUE || "0");
+
+        lmtdVol += parsedLmtdVol;
+        activationLmtd += parsedLmtdValue;
+      });
+
+      targetVol = calculateTarget(lmtdVol);
+      targetSO = calculateTarget(activationLmtd);
+
+      pendingVol = targetVol - mtdVol;
+      pendingAct = targetSO - activationMtd;
+
+      const daysElapsed = getDaysElapsedInRange(startOfMonth, currentDate);
+      const daysRemaining = getDaysRemainingInMonthFromDate(currentDate);
+
+      const ads = daysElapsed > 0 ? mtdVol / daysElapsed : 0;
+      const reqAds = daysRemaining > 0 ? pendingVol / daysRemaining : 0;
+
+      const adsAct = daysElapsed > 0 ? activationMtd / daysElapsed : 0;
+      const reqAdsAct = daysRemaining > 0 ? pendingAct / daysRemaining : 0;
+
+      const growthVol = lmtdVol > 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+      const growthVal = activationLmtd > 0 ? ((activationMtd - activationLmtd) / activationLmtd) * 100 : 0;
+
+      report.push({
+        ABM_NAME: abm,
+        TARGET_VOL: targetVol,
+        MTD_VOL: mtdVol,
+        LMTD_VOL: lmtdVol,
+        PENDING_VOL: pendingVol,
+        ADS: ads,
+        REQ_ADS: reqAds,
+        PERCENT_GWTH_VOL: growthVol,
+        TARGET_SO: targetSO,
+        ACTIVATION_MTD: activationMtd,
+        ACTIVATION_LMTD: activationLmtd,
+        PENDING_ACT: pendingAct,
+        ADS_ACT: adsAct,
+        REQ_ADS_ACT: reqAdsAct,
+        PERCENT_GWTH_VAL: growthVal
+      });
+
+      console.log(`ABM: ${abm}`);
+      console.log(`Report entry: ${JSON.stringify(report[report.length - 1])}`);
+    }
+
+    console.log(`Report generated with ${report.length} entries`);
+
+    return res.status(200).json(report);
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
+
+exports.getSalesDataSegmentWise = async (req, res) => {
+  try {
+    let { start_date, end_date, data_format } = req.query;
+
+    if (!data_format) data_format = "value";
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    const currentMonth = endDate.getMonth() + 1;
+    const currentYear = endDate.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const daysPassed = endDate.getDate();
+
+    // Calculate the last month's corresponding date range for LMTD comparison
+    let lastMonthStartDate = new Date(startDate);
+    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+    let lastMonthEndDate = new Date(endDate);
+    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+    const targetValues = {
+      "100K": 82729425,
+      "70-100K": 30461652,
+      "40-70K": 25169124,
+      "30-40K": 27633511,
+      "20-30K": 11072500,
+      "15-20K": 33387787,
+      "10-15K": 14580195,
+      "6-10K": 9291145,
+      "Tab >40K": 5202269,
+      "Tab <40K": 3844941,
+      "Wearable": 2676870
+    };
+
+    const staticIds = [
+      "100K",
+      "70-100K",
+      "40-70K",
+      "30-40K",
+      "20-30K",
+      "15-20K",
+      "10-15K",
+      "6-10K",
+      "Tab >40K",
+      "Tab <40K",
+      "Wearable"
+    ];
+
+    // Fetch sales data
+    const salesData = await SalesData.aggregate([
+      {
+        $match: {
+          "SALES TYPE": "Sell Out"
+        }
+      },
+      {
+        $group: {
+          _id: "$Segment New",
+          "MTD SELL OUT": {
+            $sum: {
+              $toInt: "$MTD VALUE"
+            }
+          },
+          "LMTD SELL OUT": {
+            $sum: {
+              $toInt: "$LMTD VALUE"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Manually assign static IDs and calculate additional fields
+    const resultData = staticIds.map(id => {
+      const segmentData = salesData.find(segment => segment._id === id) || {};
+      const targetValue = targetValues[id] || 0;
+      const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+      const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+
+      return {
+        _id: id,
+        "MTD SELL OUT": mtdSellOut,
+        "LMTD SELL OUT": lmtSellOut,
+        "TARGET VALUE": targetValue,
+        "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+        "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+        "VAL PENDING": targetValue - mtdSellOut,
+        "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+        "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+      };
+    });
+
+    res.status(200).json(resultData);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+
+
+
+
+
 
 
