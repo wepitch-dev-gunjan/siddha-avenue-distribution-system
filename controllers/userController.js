@@ -8,7 +8,12 @@ const { JWT_SECRET } = process.env;
 const { token } = require("../middlewares/authMiddlewares");
 require("dotenv").config();
 
-const { client, smsCallback, messageType } = require("../services/smsService");
+const {
+  client,
+  smsCallback,
+  messageType,
+  message,
+} = require("../services/smsService");
 const Role = require("../models/Role");
 const { mongoose } = require("mongoose");
 const { transporter } = require("../services/forgotPassword");
@@ -144,45 +149,34 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-exports.register = async (req, res) => {
+exports.register = async () => {
   try {
-    const { name, email, role, parents, password } = req.body;
+    const { name, email, password, position } = req.body;
 
-    console.log(name, email, role, parents, password);
-    // Check if the user already exists
     let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const parentsIds = parents.map((parent) => parent._id);
-
+    if (!user) return res.status(400).json({ message: "User Already Exist" });
     const hashedPassword = await bcrypt.hash(password, 10);
-    // Create a new user instance
-    user = new User({
+    user = new user({
       name,
       email,
-      role: role._id,
-      parents: parentsIds,
       password: hashedPassword,
+      position,
     });
-
-    // Save the user to the database
     await user.save();
-
-    // Generate JWT token
     const token = jwt.sign(
-      { user_id: user._id, name: user.name, email: user.email },
+      {
+        user_id: user._id,
+        name: user.name,
+        email: user.email,
+        phone_number: user.phone_number,
+        position: user.position,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
-
-    res.status(201).json({
-      message: "User registered successfully",
-      user: {
-        name: user.name,
-        email: user.email,
-      },
+    return res.status(201).json({
+      message: "user registeres successfully",
+      user: { name: user.name, email: user.email },
       token,
     });
   } catch (error) {
@@ -194,23 +188,30 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if(!email || !password) return res.status(404).send({
-      error: "Credentials are required"
-    })
-    console.log("jkjkhkjh");
+    if (!email || !password)
+      return res.status(404).send({
+        error: "Credentials are required",
+      });
+
     // Find the user by email
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    // Check if the password is correct
+
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     // Successful login
     const token = jwt.sign(
-      { user_id: user._id, name: user.name, phone_number: user.phone_number },
+      {
+        user_id: user._id,
+        name: user.name,
+        phone_number: user.phone_number,
+        email: user.email,
+        position: user.position,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -223,7 +224,6 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
 
 exports.getUser = async (req, res) => {
   try {
