@@ -3,12 +3,12 @@ const {
   getUser,
   getUsers,
   login,
-  register,
-  editProfile,
   getChildren,
   forgotPassword,
   resetPassword,
   getParents,
+  register,
+  editProfile,
 } = require("../controllers/userController");
 const { userAuth, adminAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();

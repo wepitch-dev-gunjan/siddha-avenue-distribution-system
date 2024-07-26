@@ -149,14 +149,14 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-exports.register = async () => {
+exports.register = async (req, res) => {
   try {
     const { name, email, password, position } = req.body;
 
     let user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User Already Exist" });
+    if (user) return res.status(400).json({ message: "User Already Exist" });
     const hashedPassword = await bcrypt.hash(password, 10);
-    user = new user({
+    user = new User({
       name,
       email,
       password: hashedPassword,
