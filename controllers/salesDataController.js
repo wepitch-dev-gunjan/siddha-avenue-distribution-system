@@ -1386,6 +1386,20 @@ exports.getSalesDataSegmentWise = async (req, res) => {
       "Wearable": 2676870
     };
 
+    const targetVolumes = {
+        "100K": 574,
+        "70-100K": 347,
+        "40-70K": 454,
+        "30-40K": 878,
+        "20-30K": 423,
+        "15-20K": 1947,
+        "10-15K": 1027,
+        "6-10K": 1020,
+        "Tab >40K": 231,
+        "Tab <40K": 59,
+        "Wearable": 130
+    }
+
     const staticIds = [
       "100K",
       "70-100K",
@@ -1412,12 +1426,12 @@ exports.getSalesDataSegmentWise = async (req, res) => {
           _id: "$Segment New",
           "MTD SELL OUT": {
             $sum: {
-              $toInt: "$MTD VALUE"
+              $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
             }
           },
           "LMTD SELL OUT": {
             $sum: {
-              $toInt: "$LMTD VALUE"
+              $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
             }
           }
         }
@@ -1428,20 +1442,36 @@ exports.getSalesDataSegmentWise = async (req, res) => {
     const resultData = staticIds.map(id => {
       const segmentData = salesData.find(segment => segment._id === id) || {};
       const targetValue = targetValues[id] || 0;
+      const targetVolume = targetVolumes[id] || 0;
       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
 
-      return {
-        _id: id,
-        "MTD SELL OUT": mtdSellOut,
-        "LMTD SELL OUT": lmtSellOut,
-        "TARGET VALUE": targetValue,
-        "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
-        "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
-        "VAL PENDING": targetValue - mtdSellOut,
-        "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
-        "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
-      };
+      if (data_format === "value"){
+        return {
+          _id: id,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VALUE": targetValue,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VAL PENDING": targetValue - mtdSellOut,
+          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      } else if (data_format === "volume") {
+        return {
+          _id: id,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VOLUME": targetVolume,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VOL PENDING": targetVolume - mtdSellOut,
+          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      }
+
     });
 
     res.status(200).json(resultData);
@@ -1451,7 +1481,6 @@ exports.getSalesDataSegmentWise = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
-
 
 
 
