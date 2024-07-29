@@ -18,6 +18,7 @@ const Role = require("../models/Role");
 const { mongoose } = require("mongoose");
 const { transporter } = require("../services/forgotPassword");
 const { validationResult } = require("express-validator");
+const { log } = require("console");
 
 // Route to change password
 exports.resetPassword = async (req, res) => {
@@ -195,14 +196,18 @@ exports.login = async (req, res) => {
 
     // Find the user by email
     const user = await User.findOne({ email });
+    console.log(user);
     if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res
+        .status(401)
+        .json({ error: " User not  register wiht this email id" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
+    console.log(user);
     // Successful login
     const token = jwt.sign(
       {
@@ -218,6 +223,7 @@ exports.login = async (req, res) => {
     res.status(201).json({
       message: "User logged in successfully",
       token,
+      verified: user.verified,
     });
   } catch (error) {
     console.error(error);
