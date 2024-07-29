@@ -177,7 +177,7 @@ exports.register = async (req, res) => {
     );
     return res.status(201).json({
       message: "user registeres successfully",
-      user: { name: user.name, email: user.email },
+      user: { name: user.name, email: user.email, verified: user.verified },
       token,
     });
   } catch (error) {
@@ -200,7 +200,7 @@ exports.login = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ error: " User not  register wiht this email id" });
+        .json({ error: " User not  register with this email id" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
