@@ -1479,6 +1479,129 @@ exports.getSalesDataASMWise = async (req, res) => {
  }
 };
 
+exports.getSalesDataRSOWise = async (req, res) => {
+  try {
+    let { start_date, end_date, data_format } = req.query;
+    if (!data_format) data_format = "value";
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+    
+    const currentMonth = endDate.getMonth() + 1;
+    const currentYear = endDate.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const daysPassed = endDate.getDate();
+
+    // Calculate the last month's corresponding date range for LMTD comparison
+    let lastMonthStartDate = new Date(startDate);
+    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+    let lastMonthEndDate = new Date(endDate);
+    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+    const targetValues = {
+      "Ravindra Singh Shekhawat": 203383462,
+      "Rishi Raj Pareek": 40339527,
+    };
+    
+    const targetVolumes = {
+      "Ravindra Singh Shekhawat": 6356,
+      "Rishi Raj Pareek": 2246,
+    };
+
+    const staticRSONames = [
+      "Ravindra Singh Shekhawat",
+      "Rishi Raj Pareek",
+    ];
+
+    // Fetch sales data
+    const salesData = await SalesData.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+              timezone: "UTC" // Specify timezone if necessary
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          "SALES TYPE": "Sell Out",
+          parsedDate: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: "$RSO",
+          "MTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+            }
+          },
+          "LMTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Manually assign static RSOs and calculate additional fields
+    const resultData = staticRSONames.map(rsoName => {
+      const rsoData = salesData.find(rso => rso._id === rsoName) || {};
+      const targetValue = targetValues[rsoName] || 0;
+      const targetVolume = targetVolumes[rsoName] || 0;
+      const mtdSellOut = rsoData["MTD SELL OUT"] || 0;
+      const lmtSellOut = rsoData["LMTD SELL OUT"] || 0;
+
+      if (data_format === "value") {
+        return {
+          _id: rsoName,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VALUE": targetValue,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VAL PENDING": targetValue - mtdSellOut,
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      } else if (data_format === "volume") {
+        return {
+          _id: rsoName,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VOLUME": targetVolume,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VOL PENDING": targetVolume - mtdSellOut,
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      }
+    });
+
+    res.status(200).json(resultData);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
 
 
 
