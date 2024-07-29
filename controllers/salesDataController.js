@@ -794,8 +794,20 @@ exports.getSalesDataSegmentWise = async (req, res) => {
     // Fetch sales data
     const salesData = await SalesData.aggregate([
       {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+              timezone: "UTC" // Specify timezone if necessary
+            }
+          }
+        }
+      },
+      {
         $match: {
-          "SALES TYPE": "Sell Out"
+          "SALES TYPE": "Sell Out",
+          parsedDate: {$gte: startDate, $lte: endDate}
         }
       },
       {
@@ -862,12 +874,11 @@ exports.getSalesDataSegmentWise = async (req, res) => {
 exports.getSalesDataTSEWise = async (req, res) => {
   try {
     let { start_date, end_date, data_format } = req.query;
-    // console.log("Values Rcd: ", start_date, end_date, data_format)
     if (!data_format) data_format = "value";
 
     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     let endDate = end_date ? new Date(end_date) : new Date();
-    // console.log("Start dat, End Date: ", startDate, endDate)
+
     const parseDate = (dateString) => {
       const [month, day, year] = dateString.split('/');
       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
@@ -875,7 +886,7 @@ exports.getSalesDataTSEWise = async (req, res) => {
 
     startDate = parseDate(startDate.toLocaleDateString('en-US'));
     endDate = parseDate(endDate.toLocaleDateString('en-US'));
-    
+
     const currentMonth = endDate.getMonth() + 1;
     const currentYear = endDate.getFullYear();
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
@@ -905,7 +916,7 @@ exports.getSalesDataTSEWise = async (req, res) => {
       "Sunny Hatwal": 72451604,
       "Vacant": 3054409
     };
-    
+
     const targetVolumes = {
       "Anil Choudhary": 1263,
       "Dhanajay": 352,
@@ -954,7 +965,7 @@ exports.getSalesDataTSEWise = async (req, res) => {
       {
         $match: {
           "SALES TYPE": "Sell Out",
-          // DATE: { $gte: startDate, $lte: endDate }
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -979,7 +990,6 @@ exports.getSalesDataTSEWise = async (req, res) => {
       const tseData = salesData.find(tse => tse._id === tseName) || {};
       const targetValue = targetValues[tseName] || 0;
       const targetVolume = targetVolumes[tseName] || 0;
-      // console.log("MTD:", tseData["MTD SELL OUT"])
       const mtdSellOut = tseData["MTD SELL OUT"] || 0;
       const lmtSellOut = tseData["LMTD SELL OUT"] || 0;
 
@@ -992,7 +1002,7 @@ exports.getSalesDataTSEWise = async (req, res) => {
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VAL PENDING": targetValue - mtdSellOut,
-          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       } else if (data_format === "volume") {
@@ -1004,7 +1014,7 @@ exports.getSalesDataTSEWise = async (req, res) => {
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VOL PENDING": targetVolume - mtdSellOut,
-          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
@@ -1018,15 +1028,14 @@ exports.getSalesDataTSEWise = async (req, res) => {
   }
 };
 
+
 exports.getSalesDataABMWise = async (req, res) => {
   try {
     let { start_date, end_date, data_format } = req.query;
-    // console.log("Values Rcd: ", start_date, end_date, data_format)
     if (!data_format) data_format = "value";
 
     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     let endDate = end_date ? new Date(end_date) : new Date();
-    // console.log("Start dat, End Date: ", startDate, endDate)
     const parseDate = (dateString) => {
       const [month, day, year] = dateString.split('/');
       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
@@ -1089,7 +1098,7 @@ exports.getSalesDataABMWise = async (req, res) => {
       {
         $match: {
           "SALES TYPE": "Sell Out",
-          // DATE: { $gte: startDate, $lte: endDate }
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
