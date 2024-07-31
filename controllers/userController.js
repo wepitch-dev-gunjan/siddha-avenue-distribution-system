@@ -243,7 +243,9 @@ exports.getUser = async (req, res) => {
     const response = {
       name: user.name,
       phone_number: user.phone_number,
-      role,
+      role: user.position,
+      email: user.email,
+      verified: user.verified,
     };
     res.status(200).json(response);
   } catch (error) {
