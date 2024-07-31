@@ -451,3 +451,25 @@ exports.verifyOtpByPhone = async (req, res) => {
     res.status(500).send({ error: "Internal server error" });
   }
 };
+exports.getUserForUser = async (req, res) => {
+  try {
+    const { user_id } = req;
+
+    // Fetch user details from the database
+    const user = await User.findOne({ _id: user_id });
+    const roleObj = await Role.findOne({ _id: user.role });
+    const role = roleObj?.name ? roleObj.name : "No role assigned yet";
+
+    const response = {
+      name: user.name,
+      phone_number: user.phone_number,
+      role: user.position,
+      email: user.email,
+      verified: user.verified,
+    };
+    res.status(200).json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};

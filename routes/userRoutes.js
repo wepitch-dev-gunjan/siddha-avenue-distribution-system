@@ -9,6 +9,7 @@ const {
   getParents,
   register,
   editProfile,
+  getUserForUser,
 } = require("../controllers/userController");
 const { userAuth, adminAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
@@ -20,6 +21,7 @@ router.get("/user/profile", userAuth, getUser);
 router.post("/user/register", register);
 router.post("/user/forgotPassword", forgotPassword);
 router.post("/user/resetPassword", resetPassword);
+router.get("/userForUser", userAuth, getUserForUser);
 
 router.put("/user", userAuth, editProfile);
 router.post("/login", login);
