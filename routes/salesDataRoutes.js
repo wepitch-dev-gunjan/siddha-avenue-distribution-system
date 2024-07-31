@@ -1,5 +1,5 @@
 const express = require("express");
-const { uploadSalesData, getSalesDataChannelWise, getSalesDataSegmentWise, getSalesDataTSEWise, getSalesDashboardData, getChannelSalesDataAreaWise, getSalesDataABMWise, getSalesDataASMWise, getSalesDataRSOWise, getSalesDataCLUSTERWise, getSalesDataSegmentWiseTSE, getSegmentDataForZSM, getAllSubordinates, getSegmentDataForABM, getSegmentDataForRSO } = require("../controllers/salesDataController");
+const { uploadSalesData, getSalesDataChannelWise, getSalesDataSegmentWise, getSalesDataTSEWise, getSalesDashboardData, getChannelSalesDataAreaWise, getSalesDataABMWise, getSalesDataASMWise, getSalesDataRSOWise, getSalesDataCLUSTERWise, getSalesDataSegmentWiseTSE, getSegmentDataForZSM, getAllSubordinates, getSegmentDataForABM, getSegmentDataForRSO, getSegmentDataForASE } = require("../controllers/salesDataController");
 const { upload } = require("../services/fileUpload");
 const { userAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
@@ -21,7 +21,7 @@ router.get("/sales/segment-wise/tse", getSalesDataSegmentWiseTSE);
 router.get("/sales/segment-wise/zsm", getSegmentDataForZSM);
 router.get("/sales/segment-wise/abm", getSegmentDataForABM);
 router.get("/sales/segment-wise/rso", getSegmentDataForRSO);
-
+router.get("/sales/segment-wise/ase", getSegmentDataForASE);
 
 // GET ALL SUBORDINATE ROUTE 
 router.get("/sales/get-all-subordinates", getAllSubordinates);
