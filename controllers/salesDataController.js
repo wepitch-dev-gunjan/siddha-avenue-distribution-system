@@ -15,6 +15,16 @@ const {
   categorizePriceBand
 } = require('../helpers/reportHelpers');
 
+const { staticSegments,
+        staticZSMNames,
+        staticABMNames, 
+        staticRSONames, 
+        staticASENames, 
+        staticASMNames, 
+        staticTSENames 
+      } = require('../helpers/constants');
+
+
 
 exports.uploadSalesData = async (req, res) => {
   try {
@@ -1837,6 +1847,253 @@ exports.getSalesDataSegmentWiseTSE = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+// NEW APIs
+exports.getSegmentDataForZSM = async (req, res) => {
+  try {
+    let { start_date, end_date, data_format, zsm } = req.query;
+
+    if (!zsm) return res.status(400).send({ error: "ZSM parameter is required" });
+
+    if (!data_format) data_format = "value";
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    const currentMonth = endDate.getMonth() + 1;
+    const currentYear = endDate.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const daysPassed = endDate.getDate();
+
+    // Calculate the last month's corresponding date range for LMTD comparison
+    let lastMonthStartDate = new Date(startDate);
+    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+    let lastMonthEndDate = new Date(endDate);
+    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+    const targetValues = {
+      "100K": 82729425,
+      "70-100K": 30461652,
+      "40-70K": 25169124,
+      "30-40K": 27633511,
+      "20-30K": 11072500,
+      "15-20K": 33387787,
+      "10-15K": 14580195,
+      "6-10K": 9291145,
+      "Tab >40K": 5202269,
+      "Tab <40K": 3844941,
+      "Wearable": 2676870
+    };
+
+    const targetVolumes = {
+        "100K": 574,
+        "70-100K": 347,
+        "40-70K": 454,
+        "30-40K": 878,
+        "20-30K": 423,
+        "15-20K": 1947,
+        "10-15K": 1027,
+        "6-10K": 1020,
+        "Tab >40K": 231,
+        "Tab <40K": 59,
+        "Wearable": 130
+    }
+
+    // Fetch sales data
+    const salesData = await SalesData.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+              timezone: "UTC" // Specify timezone if necessary
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          "SALES TYPE": "Sell Out",
+          "ZSM": zsm,
+          parsedDate: {$gte: startDate, $lte: endDate}
+        }
+      },
+      {
+        $group: {
+          _id: "$Segment New",
+          "MTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+            }
+          },
+          "LMTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Find FTD data seperately 
+    const ftdData = await SalesData.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+              timezone: "UTC" // Specify timezone if necessary
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          "SALES TYPE": "Sell Out",
+          "ZSM": zsm,
+          parsedDate: endDate
+        }
+      },
+      {
+        $group: {
+          _id: "$Segment New",
+          "FTD": {
+            $sum: {
+              $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Manually assign static IDs and calculate additional fields
+    const resultData = staticSegments.map(id => {
+      const segmentData = salesData.find(segment => segment._id === id) || {};
+      const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+      const targetValue = targetValues[id] || 0;
+      const targetVolume = targetVolumes[id] || 0;
+      const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+      const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+      const ftdSellOut = ftdSegmentData["FTD"] || 0;
+      
+
+      if (data_format === "value"){
+        return {
+          _id: id,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VALUE": targetValue,
+          "FTD" : ftdSellOut,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VAL PENDING": targetValue - mtdSellOut,
+          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      } else if (data_format === "volume") {
+        return {
+          _id: id,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VOLUME": targetVolume,
+          "FTD" : ftdSellOut,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VOL PENDING": targetVolume - mtdSellOut,
+          "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      }
+
+    });
+
+    res.status(200).json(resultData);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+exports.getAllSubordinates = async (req, res) => {
+  try {
+    let { name, position } = req.query;
+
+    if (!name || !position) {
+      return res.status(400).json({ error: "Name and position are required." });
+    }
+
+    const positionsHierarchy = {
+      ZSM: ["ABM", "RSO", "ASE", "ASM", "TSE"],
+      ABM: ["RSO", "ASE", "ASM", "TSE"],
+      RSO: ["ASE", "ASM", "TSE"],
+      ASE: ["ASM", "TSE"],
+      ASM: ["TSE"],
+    };
+
+    if (!positionsHierarchy[position]) {
+      return res.status(400).json({ error: "Invalid position." });
+    }
+
+    const subordinatesPipeline = [
+      {
+        $match: {
+          [position]: name
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          ABM: { $addToSet: { $cond: [{ $or: [{ $eq: ["$ABM", ""] }, { $eq: ["$ABM", "0"] }] }, null, "$ABM"] } },
+          RSO: { $addToSet: { $cond: [{ $or: [{ $eq: ["$RSO", ""] }, { $eq: ["$RSO", "0"] }] }, null, "$RSO"] } },
+          ASE: { $addToSet: { $cond: [{ $or: [{ $eq: ["$ASE", ""] }, { $eq: ["$ASE", "0"] }] }, null, "$ASE"] } },
+          ASM: { $addToSet: { $cond: [{ $or: [{ $eq: ["$ASM", ""] }, { $eq: ["$ASM", "0"] }] }, null, "$ASM"] } },
+          TSE: { $addToSet: { $cond: [{ $or: [{ $eq: ["$TSE", ""] }, { $eq: ["$TSE", "0"] }] }, null, "$TSE"] } },
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          subordinates: positionsHierarchy[position].reduce((acc, pos) => {
+            acc[pos] = { $filter: { input: `$${pos}`, as: "name", cond: { $and: [{ $ne: ["$$name", null] }, { $ne: ["$$name", ""] }, { $ne: ["$$name", "0"] }] } } };
+            return acc;
+          }, {})
+        }
+      }
+    ];
+
+    const subordinates = await SalesData.aggregate(subordinatesPipeline);
+
+    if (!subordinates.length) {
+      return res.status(404).json({ error: "No subordinates found." });
+    }
+
+    res.status(200).json(subordinates[0].subordinates);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+
+
+
+
 
 
 
