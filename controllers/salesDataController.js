@@ -71,20 +71,18 @@ exports.uploadSalesData = async (req, res) => {
 exports.getSalesDataChannelWise = async (req, res) => {
   try {
     let { td_format, start_date, end_date, data_format } = req.query;
-    let startDate, startYear, startMonth, endDate, endMonth, endYear;
+    let  startYear, startMonth,  endMonth, endYear;
 
     if (!td_format) td_format = 'MTD'
-    if (start_date) {
-      startDate = new Date(start_date);
-    } else {
-      startDate = new Date();
-    }
-    if (end_date) {
-      endDate = new Date(end_date);
-    } else {
-      endDate = new Date();
-    }
-    if (!data_format) data_format = "value"
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
 
     startYear = startDate.getFullYear();
     startMonth = startDate.getMonth() + 1; // Month is zero-based
@@ -100,14 +98,22 @@ exports.getSalesDataChannelWise = async (req, res) => {
     if (data_format === 'value') {
       const salesStats = await SalesData.aggregate([
         {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            },
-            "SALES TYPE": "Sell Out"
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+                timezone: "UTC" // Specify timezone if necessary
+              }
+            }
           }
         },
+        {
+          $match: {
+            parsedDate: { $gte: startDate, $lte: endDate },
+            "SALES TYPE": "Sell Out"
+        },
+      },
         // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
         {
           $group: {
@@ -199,12 +205,20 @@ exports.getSalesDataChannelWise = async (req, res) => {
     if (data_format === 'volume') {
       const salesStats = await SalesData.aggregate([
         {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+                timezone: "UTC" // Specify timezone if necessary
+              }
+            }
+          }
+        },
+        {
           $match: {
-            DATE: {
-              $gte: `${startYear}-${startMonth.toString().padStart(2, '0')}-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            },
-            "SALES TYPE": "Sell Out"
+            "SALES TYPE": "Sell Out",
+            parsedDate: { $gte: startDate, $lte: endDate }
           }
         },
         // Stage 1: Group by Channel and calculate MTD and LMTD Sell out
@@ -300,7 +314,6 @@ exports.getSalesDataChannelWise = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
-
 
 exports.getSalesDashboardData = async (req, res) => {
   try {
@@ -717,160 +730,6 @@ exports.getChannelSalesDataAreaWise = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
-
-// exports.getSalesDataSegmentWise = async (req, res) => {
-//   try {
-//     let { start_date, end_date, data_format } = req.query;
-
-//     if (!data_format) data_format = "value";
-
-//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-//     let endDate = end_date ? new Date(end_date) : new Date();
-
-//     const parseDate = (dateString) => {
-//       const [month, day, year] = dateString.split('/');
-//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
-//     };
-
-//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
-//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
-
-//     const currentMonth = endDate.getMonth() + 1;
-//     const currentYear = endDate.getFullYear();
-//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-//     const daysPassed = endDate.getDate();
-
-//     // Calculate the last month's corresponding date range for LMTD comparison
-//     let lastMonthStartDate = new Date(startDate);
-//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-//     let lastMonthEndDate = new Date(endDate);
-//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
-
-//     const targetValues = {
-//       "100K": 82729425,
-//       "70-100K": 30461652,
-//       "40-70K": 25169124,
-//       "30-40K": 27633511,
-//       "20-30K": 11072500,
-//       "15-20K": 33387787,
-//       "10-15K": 14580195,
-//       "6-10K": 9291145,
-//       "Tab >40K": 5202269,
-//       "Tab <40K": 3844941,
-//       "Wearable": 2676870
-//     };
-
-//     const targetVolumes = {
-//         "100K": 574,
-//         "70-100K": 347,
-//         "40-70K": 454,
-//         "30-40K": 878,
-//         "20-30K": 423,
-//         "15-20K": 1947,
-//         "10-15K": 1027,
-//         "6-10K": 1020,
-//         "Tab >40K": 231,
-//         "Tab <40K": 59,
-//         "Wearable": 130
-//     }
-
-//     const staticIds = [
-//       "100K",
-//       "70-100K",
-//       "40-70K",
-//       "30-40K",
-//       "20-30K",
-//       "15-20K",
-//       "10-15K",
-//       "6-10K",
-//       "Tab >40K",
-//       "Tab <40K",
-//       "Wearable"
-//     ];
-
-//     // Fetch sales data
-//     const salesData = await SalesData.aggregate([
-//       {
-//         $addFields: {
-//           parsedDate: {
-//             $dateFromString: {
-//               dateString: "$DATE",
-//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-//               timezone: "UTC" // Specify timezone if necessary
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $match: {
-//           "SALES TYPE": "Sell Out",
-//           parsedDate: {$gte: startDate, $lte: endDate}
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$Segment New",
-//           "MTD SELL OUT": {
-//             $sum: {
-//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
-//             }
-//           },
-//           "LMTD SELL OUT": {
-//             $sum: {
-//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
-//             }
-//           }
-//         }
-//       }
-//     ]);
-
-//     // Manually assign static IDs and calculate additional fields
-//     const resultData = staticIds.map(id => {
-//       const segmentData = salesData.find(segment => segment._id === id) || {};
-//       const targetValue = targetValues[id] || 0;
-//       const targetVolume = targetVolumes[id] || 0;
-//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
-//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
-
-//       if (data_format === "value"){
-//         return {
-//           _id: id,
-//           "MTD SELL OUT": mtdSellOut,
-//           "LMTD SELL OUT": lmtSellOut,
-//           "TARGET VALUE": targetValue,
-//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
-//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
-//           "VAL PENDING": targetValue - mtdSellOut,
-//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
-//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
-//         };
-//       } else if (data_format === "volume") {
-//         return {
-//           _id: id,
-//           "MTD SELL OUT": mtdSellOut,
-//           "LMTD SELL OUT": lmtSellOut,
-//           "TARGET VOLUME": targetVolume,
-//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
-//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
-//           "VOL PENDING": targetVolume - mtdSellOut,
-//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
-//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
-//         };
-//       }
-
-//     });
-
-//     res.status(200).json(resultData);
-
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send("Internal Server Error");
-//   }
-// };
-
 
 exports.getSalesDataSegmentWise = async (req, res) => {
   try {
@@ -1351,7 +1210,7 @@ exports.getSalesDataABMWise = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
-// ASM Wise
+
 exports.getSalesDataASMWise = async (req, res) => {
  try {
    let { start_date, end_date, data_format } = req.query;
@@ -1582,6 +1441,177 @@ exports.getSalesDataRSOWise = async (req, res) => {
       } else if (data_format === "volume") {
         return {
           _id: rsoName,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VOLUME": targetVolume,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VOL PENDING": targetVolume - mtdSellOut,
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      }
+    });
+
+    res.status(200).json(resultData);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+exports.getSalesDataCLUSTERWise = async (req, res) => {
+  try {
+    let { start_date, end_date, data_format } = req.query;
+    if (!data_format) data_format = "value";
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+    
+    const currentMonth = endDate.getMonth() + 1;
+    const currentYear = endDate.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    const daysPassed = endDate.getDate();
+
+    // Calculate the last month's corresponding date range for LMTD comparison
+    let lastMonthStartDate = new Date(startDate);
+    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+    let lastMonthEndDate = new Date(endDate);
+    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+    const targetValues = {
+      "Agra Road": 5836167,
+      "Barkat Nagar": 1149923,
+      "GANPATI Plaza": 47717732,
+      "Jagat Pura & India Gate": 9686231,
+      "Jayanti": 24796104,
+      "Mahesh Nagar": 845053,
+      "Malpura Gate": 9668430,
+      "Malviya Ngr & Tonk Road": 43155775,
+      "NSR": 15043632,
+      "Raisar Plaza": 3086038,
+      "RAJAPARK": 21331528,
+      "Sanganer": 17581776,
+      "Shastri Nagar": 6969862,
+      "Sodala": 17965104,
+      "Udaipur": 1850803,
+      "Vaishali Nagar": 7853244,
+      "WALL CITY": 11036391,
+      "Jodhpur": 474141,
+    };
+    
+    const targetVolumes = {
+      "Agra Road": 227,
+      "Barkat Nagar": 53,
+      "GANPATI Plaza": 852,
+      "Jagat Pura & India Gate": 411,
+      "Jayanti": 627,
+      "Mahesh Nagar": 40,
+      "Malpura Gate": 395,
+      "Malviya Ngr & Tonk Road": 1049,
+      "NSR": 436,
+      "Raisar Plaza": 125,
+      "RAJAPARK": 568,
+      "Sanganer": 658,
+      "Shastri Nagar": 299,
+      "Sodala": 603,
+      "Udaipur": 53,
+      "Vaishali Nagar": 201,
+      "WALL CITY": 465,
+      "Jodhpur": 10,
+    };
+    
+    const staticClusterNames = [
+      "Agra Road",
+      "Barkat Nagar",
+      "GANPATI Plaza",
+      "Jagat Pura & India Gate",
+      "Jayanti",
+      "Mahesh Nagar",
+      "Malpura Gate",
+      "Malviya Ngr & Tonk Road",
+      "NSR",
+      "Raisar Plaza",
+      "RAJAPARK",
+      "Sanganer",
+      "Shastri Nagar",
+      "Sodala",
+      "Udaipur",
+      "Vaishali Nagar",
+      "WALL CITY",
+      "Jodhpur",
+    ];
+
+    // Fetch sales data
+    const salesData = await SalesData.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+              timezone: "UTC" // Specify timezone if necessary
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          "SALES TYPE": "Sell Out",
+          parsedDate: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: "$CLUSTER",
+          "MTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+            }
+          },
+          "LMTD SELL OUT": {
+            $sum: {
+              $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Manually assign static RSOs and calculate additional fields
+    const resultData = staticClusterNames.map(clusterName => {
+      const clusterData = salesData.find(cluster => cluster._id === clusterName) || {};
+      const targetValue = targetValues[clusterName] || 0;
+      const targetVolume = targetVolumes[clusterName] || 0;
+      const mtdSellOut = clusterData["MTD SELL OUT"] || 0;
+      const lmtSellOut = clusterData["LMTD SELL OUT"] || 0;
+
+      if (data_format === "value") {
+        return {
+          _id: clusterName,
+          "MTD SELL OUT": mtdSellOut,
+          "LMTD SELL OUT": lmtSellOut,
+          "TARGET VALUE": targetValue,
+          "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+          "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+          "VAL PENDING": targetValue - mtdSellOut,
+          // "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, tse) => acc + (tse["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+          "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+        };
+      } else if (data_format === "volume") {
+        return {
+          _id: clusterName,
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VOLUME": targetVolume,
