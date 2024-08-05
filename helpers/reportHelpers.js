@@ -99,3 +99,8 @@ exports.fetchTargetValuesAndVolumes = async (endDate, name, category) => {
 
   return { targetValues, targetVolumes };
 };
+
+exports.getMonthFromDateExported = (dateString) => {
+  const [month, , year] = dateString.split('/');
+  return `${month.padStart(2, '0')}/${year}`;
+};

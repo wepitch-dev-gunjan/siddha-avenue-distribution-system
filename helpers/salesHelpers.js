@@ -64,3 +64,8 @@ exports.calculateTarget = (lmtVolume, growthFactor = 0.10) => {
   const baseTarget = lmtVolume ? parseInt(lmtVolume, 10) : 10; // Default to 10 if LMT_VOLUME is 0 or not available
   return Math.ceil(baseTarget * (1 + growthFactor));
 };
+
+exports.parseDate = (dateString) => {
+  const [month, day, year] = dateString.split('/');
+  return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+};

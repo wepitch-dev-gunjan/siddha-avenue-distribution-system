@@ -1,6 +1,9 @@
 const csvParser = require("csv-parser");
 const { Readable } = require("stream");
 const ModelData = require("../models/ModelData");
+const SalesData = require("../models/SalesData");
+const { getMonthFromDateExported } = require("../helpers/reportHelpers");
+const { parseDate } = require("../helpers/salesHelpers");
 
 exports.uploadModelData = async (req, res) => {
     try {
@@ -54,3 +57,117 @@ exports.uploadModelData = async (req, res) => {
     }
   };
 
+exports.getSalesDataModelWise = async (req, res) => {
+    try {
+      let { start_date, end_date } = req.query;
+  
+      let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      let endDate = end_date ? new Date(end_date) : new Date();
+  
+      startDate = parseDate(startDate.toLocaleDateString('en-US'));
+      endDate = parseDate(endDate.toLocaleDateString('en-US'));
+  
+      const currentMonth = endDate.getMonth() + 1;
+      const currentYear = endDate.getFullYear();
+      const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+      const daysPassed = endDate.getDate();
+  
+      // Fetch model data based on the first date of the month of endDate
+      const targetMonth = getMonthFromDateExported(endDate.toLocaleDateString('en-US'));
+      const [month, year] = targetMonth.split('/');
+      const targetStartDate = `${parseInt(month)}/1/${year}`;
+  
+      const modelData = await ModelData.find({ 'START DATE': targetStartDate });
+  
+      // Fetch sales data
+      const salesData = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            "SALES TYPE": "Sell Out",
+            parsedDate: { $gte: startDate, $lte: endDate }
+          }
+        },
+        {
+          $group: {
+            _id: "$MARKET",
+            "MTD": { $sum: { $toInt: "$MTD VOLUME" } },
+            "LMTD": { $sum: { $toInt: "$LMTD VOLUME" } }
+          }
+        }
+      ]);
+  
+      // Fetch FTD data separately
+      const ftdData = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            "SALES TYPE": "Sell Out",
+            parsedDate: endDate
+          }
+        },
+        {
+          $group: {
+            _id: "$MARKET",
+            "FTD Vol": { $sum: { $toInt: "$MTD VOLUME" } }
+          }
+        }
+      ]);
+  
+      // Combine data
+      const resultData = modelData.map(model => {
+        const modelName = model['MODEL NAME'];
+        const salesEntry = salesData.find(entry => entry._id === modelName) || {};
+        const ftdEntry = ftdData.find(entry => entry._id === modelName) || {};
+  
+        const mtd = salesEntry.MTD || 0;
+        const lmtd = salesEntry.LMTD || 0;
+        const ftdVol = ftdEntry['FTD Vol'] || 0;
+  
+        const averageDaySale = mtd / Math.max(daysPassed - 1, 1);
+        const dos = (parseInt(model['MKT STK']) + parseInt(model['DMDD STK'])) / averageDaySale;
+  
+        return {
+          "Price Band": model['PRICE BAND'] || '',
+          "Market Name": model['MARKET NAME'] || '',
+          "MODEL NAME": modelName,
+          "Model Target": parseInt(model['MODEL TARGET']),
+          "LMTD": lmtd,
+          "MTD": mtd,
+          "FTD Vol": ftdVol,
+          "% Gwth": lmtd ? (((mtd - lmtd) / lmtd) * 100).toFixed(2) : "N/A",
+          "ADS": averageDaySale.toFixed(2),
+          "DP": model['DP'] || 0,
+          "Mkt Stk": parseInt(model['MKT STK']),
+          "Dmdd Stk": parseInt(model['DMDD STK']),
+          "M+S": parseInt(model['MKT STK']) + parseInt(model['DMDD STK']),
+          "DOS": dos.toFixed(2)
+        };
+      });
+  
+      res.status(200).json(resultData);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Internal Server Error");
+    }
+  };
