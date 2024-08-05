@@ -3,7 +3,7 @@ const { Readable } = require("stream");
 const xlsx = require("xlsx");
 const Data = require("../models/SalesData");
 const SalesData = require("../models/SalesData");
-const { getLastDaysOfPreviousMonths, channelOrder, getDaysElapsedInMonth, getDaysRemainingInMonth, getDaysElapsedInRange, getDaysRemainingInMonthFromDate, calculateTarget, getStartOfMonth, getLastMonthPeriod  } = require("../helpers/salesHelpers");
+const { getLastDaysOfPreviousMonths, channelOrder, getDaysElapsedInMonth, getDaysRemainingInMonth, getDaysElapsedInRange, getDaysRemainingInMonthFromDate, calculateTarget, getStartOfMonth, getLastMonthPeriod, formatNumberIndian, parseDate  } = require("../helpers/salesHelpers");
 const {
   filterSalesData,
   generateSegmentWiseReport,
@@ -327,65 +327,371 @@ exports.getSalesDataChannelWise = async (req, res) => {
   }
 };
 
+// exports.getSalesDashboardData = async (req, res) => {
+//   try {
+//     let { td_format, start_date, end_date, data_format } = req.query;
+//     let startDate, startYear, startMonth, endDate, endMonth, endYear;
+
+//     if (!td_format) td_format = 'MTD';
+//     if (start_date) {
+//       startDate = new Date(start_date);
+//     } else {
+//       startDate = new Date(-1);
+//     }
+//     if (end_date) {
+//       endDate = new Date(end_date);
+//     } else {
+//       endDate = new Date();
+//     }
+//     if (!data_format) data_format = "value";
+
+//     startYear = startDate.getFullYear();
+//     startMonth = startDate.getMonth() + 1; // Month is zero-based
+//     endYear = endDate.getFullYear();
+//     endMonth = endDate.getMonth() + 1; // Month is zero-based
+
+//     const presentDayOfMonth = endDate.getDate();
+
+//     let matchStage = {};
+
+//     if (start_date && end_date) {
+//       matchStage = {
+//         DATE: {
+//           $gte: new Date(`${startYear}-${startMonth.toString().padStart(2, '0')}-01`),
+//           $lte: new Date(`${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`)
+//         }
+//       };
+//     }
+
+//     const lytdStartDate = `${startYear - 1}-01-01`;
+//     const lytdEndDate = `${startYear - 1}-${startMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`;
+
+//     let result = {};
+
+//     const formatNumber = (num) => {
+//       if (num >= 1e6) {
+//         return (num / 1e6).toFixed(2) + 'M';
+//       }
+//       if (num >= 1e3) {
+//         return (num / 1e3).toFixed(2) + 'K';
+//       }
+//       return num.toString();
+//     };
+
+//     if (td_format === 'MTD' && data_format === 'value') {
+//       const salesStats = await SalesData.aggregate([
+//         { $match: matchStage },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             MTD_Value: { $sum: { $toInt: "$MTD VALUE" } },
+//             LMTD_Value: { $sum: { $toInt: "$LMTD VALUE" } }
+//           }
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             salesType: "$_id",
+//             MTD_Value: 1,
+//             LMTD_Value: 1,
+//             Growth_Percent: {
+//               $cond: {
+//                 if: { $eq: ["$LMTD_Value", 0] },
+//                 then: "N/A",
+//                 else: {
+//                   $multiply: [
+//                     { $divide: [{ $subtract: ["$MTD_Value", "$LMTD_Value"] }, "$LMTD_Value"] },
+//                     100
+//                   ]
+//                 }
+//               }
+//             }
+//           }
+//         }
+//       ]);
+
+//       salesStats.forEach(item => {
+//         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
+//           result.td_sell_in = formatNumber(item.MTD_Value);
+//           result.ltd_sell_in = formatNumber(item.LMTD_Value);
+//           result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
+//         } else if (item.salesType === "Sell Out") {
+//           result.td_sell_out = formatNumber(item.MTD_Value);
+//           result.ltd_sell_out = formatNumber(item.LMTD_Value);
+//           result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
+//         }
+//       });
+
+//     }
+
+//     if (td_format === 'MTD' && data_format === 'volume') {
+//       const salesStats = await SalesData.aggregate([
+//         { $match: matchStage },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             MTD_Volume: { $sum: { $toInt: "$MTD VOLUME" } },
+//             LMTD_Volume: { $sum: { $toInt: "$LMTD VOLUME" } }
+//           }
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             salesType: "$_id",
+//             MTD_Volume: 1,
+//             LMTD_Volume: 1,
+//             Growth_Percent: {
+//               $cond: {
+//                 if: { $eq: ["$LMTD_Volume", 0] },
+//                 then: "N/A",
+//                 else: {
+//                   $multiply: [
+//                     { $divide: [{ $subtract: ["$MTD_Volume", "$LMTD_Volume"] }, "$LMTD_Volume"] },
+//                     100
+//                   ]
+//                 }
+//               }
+//             }
+//           }
+//         }
+//       ]);
+
+//       salesStats.forEach(item => {
+//         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
+//           result.td_sell_in = formatNumber(item.MTD_Volume);
+//           result.ltd_sell_in = formatNumber(item.LMTD_Volume);
+//           result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
+//         } else if (item.salesType === "Sell Out") {
+//           result.td_sell_out = formatNumber(item.MTD_Volume);
+//           result.ltd_sell_out = formatNumber(item.LMTD_Volume);
+//           result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
+//         }
+//       });
+
+//     }
+
+//     if (td_format === 'YTD' && data_format === 'value') {
+//       let lastYearSalesStats = await SalesData.aggregate([
+//         {
+//           $match: {
+//             DATE: {
+//               $gte: lytdStartDate, // Start of the previous year
+//               $lte: lytdEndDate // End of the previous year's current month
+//             },
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
+//           }
+//         }
+//       ]);
+
+
+//       const lastDays = getLastDaysOfPreviousMonths()
+//       const salesStats = await SalesData.aggregate([
+//         {
+//           $match: {
+//             DATE: {
+//               $gte: `${startYear}-01-01`, // Start of the current month
+//               $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
+//             }
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
+//           }
+//         },
+//       ]);
+
+//       if (lastYearSalesStats.length <= 0) {
+//         lastYearSalesStats = [
+//           { _id: 'Sell Thru2', 'YTD VALUE': 0 },
+//           { _id: 'Sell Out', 'YTD VALUE': 0 }
+//         ]
+//       }
+
+//       // console.log("lastYearSalesStats : ", lastYearSalesStats);
+//       // console.log("salesStats : ", salesStats);
+//       salesStats.forEach(item => {
+//         if (item._id === 'Sell Out') {
+//           result.td_sell_out = item['YTD VALUE'];
+//         } else {
+//           result.td_sell_in = item['YTD VALUE'];
+//         }
+//       })
+//       lastYearSalesStats.forEach(item => {
+//         if (item._id === 'Sell Out') {
+//           result.ltd_sell_out = item['YTD VALUE'];
+//         } else {
+//           result.ltd_sell_in = item['YTD VALUE'];
+//         }
+//       })
+
+
+//       result.sell_in_growth =
+//         result.ltd_sell_in !== 0 ?
+//           (result.td_sell_in - result.ltd_sell_in) / result.ltd_sell_in * 100
+//           : 0;
+
+//       result.sell_out_growth =
+//         result.ltd_sell_out !== 0 ?
+//           (result.td_sell_out - result.ltd_sell_out) / result.ltd_sell_out * 100
+//           : 0;
+
+//       result.td_sell_in = formatNumber(result.td_sell_in);
+//       result.ltd_sell_in = formatNumber(result.ltd_sell_in);
+//       result.td_sell_out = formatNumber(result.td_sell_out);
+//       result.ltd_sell_out = formatNumber(result.ltd_sell_out);
+//       result.sell_in_growth = result.sell_in_growth + '%';
+//       result.sell_out_growth = result.sell_out_growth + '%';
+//     }
+
+//     if (td_format === 'YTD' && data_format === 'volume') {
+//       let lastYearSalesStats = await SalesData.aggregate([
+//         {
+//           $match: {
+//             DATE: {
+//               $gte: lytdStartDate, // Start of the previous year
+//               $lte: lytdEndDate // End of the previous year's current month
+//             },
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
+//           }
+//         }
+//       ]);
+
+
+//       const lastDays = getLastDaysOfPreviousMonths()
+//       const salesStats = await SalesData.aggregate([
+//         {
+//           $match: {
+//             DATE: {
+//               $gte: `${startYear}-01-01`, // Start of the current month
+//               $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
+//             }
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
+//           }
+//         },
+//       ]);
+
+//       if (lastYearSalesStats.length <= 0) {
+//         lastYearSalesStats = [
+//           { _id: 'Sell Thru2', 'YTD VOLUME': 0 },
+//           { _id: 'Sell Out', 'YTD VOLUME': 0 }
+//         ]
+//       }
+
+//       // console.log("lastYearSalesStats : ", lastYearSalesStats);
+//       // console.log("salesStats : ", salesStats);
+//       salesStats.forEach(item => {
+//         if (item._id === 'Sell Out') {
+//           result.td_sell_out = item['YTD VOLUME'];
+//         } else {
+//           result.td_sell_in = item['YTD VOLUME'];
+//         }
+//       })
+//       lastYearSalesStats.forEach(item => {
+//         if (item._id === 'Sell Out') {
+//           result.ltd_sell_out = item['YTD VOLUME'];
+//         } else {
+//           result.ltd_sell_in = item['YTD VOLUME'];
+//         }
+//       })
+
+
+//       result.sell_in_growth =
+//         result.ltd_sell_in !== 0 ?
+//           (result.td_sell_in - result.ltd_sell_in) / result.ltd_sell_in * 100
+//           : 0;
+
+//       result.sell_out_growth =
+//         result.ltd_sell_out !== 0 ?
+//           (result.td_sell_out - result.ltd_sell_out) / result.ltd_sell_out * 100
+//           : 0;
+
+//       result.td_sell_in = formatNumber(result.td_sell_in);
+//       result.ltd_sell_in = formatNumber(result.ltd_sell_in);
+//       result.td_sell_out = formatNumber(result.td_sell_out);
+//       result.ltd_sell_out = formatNumber(result.ltd_sell_out);
+//       result.sell_in_growth = result.sell_in_growth + '%';
+//       result.sell_out_growth = result.sell_out_growth + '%';
+//     }
+
+//     res.status(200).send(result);
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).send({ error: 'Internal Server Error' });
+//   }
+// };
+
 exports.getSalesDashboardData = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format } = req.query;
-    let startDate, startYear, startMonth, endDate, endMonth, endYear;
+    let { td_format, start_date, end_date, data_format, position, name } = req.query;
+
+    if (!position || !name) {
+      return res.status(400).send({ error: "Position and name are required." });
+    }
 
     if (!td_format) td_format = 'MTD';
-    if (start_date) {
-      startDate = new Date(start_date);
-    } else {
-      startDate = new Date(-1);
-    }
-    if (end_date) {
-      endDate = new Date(end_date);
-    } else {
-      endDate = new Date();
-    }
     if (!data_format) data_format = "value";
 
-    startYear = startDate.getFullYear();
-    startMonth = startDate.getMonth() + 1; // Month is zero-based
-    endYear = endDate.getFullYear();
-    endMonth = endDate.getMonth() + 1; // Month is zero-based
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
 
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth() + 1; // Month is zero-based
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth() + 1; // Month is zero-based
     const presentDayOfMonth = endDate.getDate();
 
-    let matchStage = {};
+    let matchStage = {
+      parsedDate: {
+        $gte: startDate,
+        $lte: endDate
+      },
+      [position]: name
+    };
 
-    if (start_date && end_date) {
-      matchStage = {
-        DATE: {
-          $gte: new Date(`${startYear}-${startMonth.toString().padStart(2, '0')}-01`),
-          $lte: new Date(`${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`)
-        }
-      };
-    }
-
-    const lytdStartDate = `${startYear - 1}-01-01`;
-    const lytdEndDate = `${startYear - 1}-${startMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`;
+    const lytdStartDate = new Date(`${endYear - 1}-01-01`);
+    const lytdEndDate = new Date(`${endYear - 1}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}`);
 
     let result = {};
 
-    const formatNumber = (num) => {
-      if (num >= 1e6) {
-        return (num / 1e6).toFixed(2) + 'M';
-      }
-      if (num >= 1e3) {
-        return (num / 1e3).toFixed(2) + 'K';
-      }
-      return num.toString();
-    };
-
-    if (td_format === 'MTD' && data_format === 'value') {
+    if (td_format === 'MTD') {
       const salesStats = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          }
+        },
         { $match: matchStage },
         {
           $group: {
             _id: "$SALES TYPE",
-            MTD_Value: { $sum: { $toInt: "$MTD VALUE" } },
-            LMTD_Value: { $sum: { $toInt: "$LMTD VALUE" } }
+            MTD_Value: { $sum: { $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME" } },
+            LMTD_Value: { $sum: { $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME" } }
           }
         },
         {
@@ -398,12 +704,7 @@ exports.getSalesDashboardData = async (req, res) => {
               $cond: {
                 if: { $eq: ["$LMTD_Value", 0] },
                 then: "N/A",
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$MTD_Value", "$LMTD_Value"] }, "$LMTD_Value"] },
-                    100
-                  ]
-                }
+                else: { $multiply: [{ $divide: [{ $subtract: ["$MTD_Value", "$LMTD_Value"] }, "$LMTD_Value"] }, 100] }
               }
             }
           }
@@ -412,125 +713,104 @@ exports.getSalesDashboardData = async (req, res) => {
 
       salesStats.forEach(item => {
         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
-          result.td_sell_in = formatNumber(item.MTD_Value);
-          result.ltd_sell_in = formatNumber(item.LMTD_Value);
+          result.td_sell_in = formatNumberIndian(item.MTD_Value);
+          result.ltd_sell_in = formatNumberIndian(item.LMTD_Value);
           result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         } else if (item.salesType === "Sell Out") {
-          result.td_sell_out = formatNumber(item.MTD_Value);
-          result.ltd_sell_out = formatNumber(item.LMTD_Value);
+          result.td_sell_out = formatNumberIndian(item.MTD_Value);
+          result.ltd_sell_out = formatNumberIndian(item.LMTD_Value);
           result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
         }
       });
 
     }
 
-    if (td_format === 'MTD' && data_format === 'volume') {
-      const salesStats = await SalesData.aggregate([
-        { $match: matchStage },
-        {
-          $group: {
-            _id: "$SALES TYPE",
-            MTD_Volume: { $sum: { $toInt: "$MTD VOLUME" } },
-            LMTD_Volume: { $sum: { $toInt: "$LMTD VOLUME" } }
-          }
-        },
-        {
-          $project: {
-            _id: 0,
-            salesType: "$_id",
-            MTD_Volume: 1,
-            LMTD_Volume: 1,
-            Growth_Percent: {
-              $cond: {
-                if: { $eq: ["$LMTD_Volume", 0] },
-                then: "N/A",
-                else: {
-                  $multiply: [
-                    { $divide: [{ $subtract: ["$MTD_Volume", "$LMTD_Volume"] }, "$LMTD_Volume"] },
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]);
-
-      salesStats.forEach(item => {
-        if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
-          result.td_sell_in = formatNumber(item.MTD_Volume);
-          result.ltd_sell_in = formatNumber(item.LMTD_Volume);
-          result.sell_in_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
-        } else if (item.salesType === "Sell Out") {
-          result.td_sell_out = formatNumber(item.MTD_Volume);
-          result.ltd_sell_out = formatNumber(item.LMTD_Volume);
-          result.sell_out_growth = item.Growth_Percent !== "N/A" ? item.Growth_Percent.toFixed(2) + '%' : "N/A";
-        }
-      });
-
-    }
-
-    if (td_format === 'YTD' && data_format === 'value') {
+    if (td_format === 'YTD') {
       let lastYearSalesStats = await SalesData.aggregate([
         {
-          $match: {
-            DATE: {
-              $gte: lytdStartDate, // Start of the previous year
-              $lte: lytdEndDate // End of the previous year's current month
-            },
-          }
-        },
-        {
-          $group: {
-            _id: "$SALES TYPE",
-            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
-          }
-        }
-      ]);
-
-
-      const lastDays = getLastDaysOfPreviousMonths()
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-01-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
             }
           }
         },
         {
-          $group: {
-            _id: "$SALES TYPE",
-            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
+          $match: {
+            parsedDate: {
+              $gte: lytdStartDate,
+              $lte: lytdEndDate
+            },
+            [position]: name
           }
         },
+        {
+          $group: {
+            _id: "$SALES TYPE",
+            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } },
+            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
+          }
+        }
+      ]);
+
+      const salesStats = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          },
+        },
+        {
+          $match: {
+            parsedDate: {
+              $gte: new Date(`${endYear}-01-01`),
+              $lte: endDate
+            },
+            [position]: name
+          }
+        },
+        {
+          $group: {
+            _id: "$SALES TYPE",
+            "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } },
+            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
+          }
+        }
       ]);
 
       if (lastYearSalesStats.length <= 0) {
         lastYearSalesStats = [
-          { _id: 'Sell Thru2', 'YTD VALUE': 0 },
-          { _id: 'Sell Out', 'YTD VALUE': 0 }
+          { _id: 'Sell Thru2', 'YTD VALUE': 0, 'YTD VOLUME': 0 },
+          { _id: 'Sell Out', 'YTD VALUE': 0, 'YTD VOLUME': 0 }
         ]
       }
 
-      // console.log("lastYearSalesStats : ", lastYearSalesStats);
-      // console.log("salesStats : ", salesStats);
       salesStats.forEach(item => {
         if (item._id === 'Sell Out') {
           result.td_sell_out = item['YTD VALUE'];
+          result.td_sell_out_volume = item['YTD VOLUME'];
         } else {
           result.td_sell_in = item['YTD VALUE'];
+          result.td_sell_in_volume = item['YTD VOLUME'];
         }
-      })
+      });
       lastYearSalesStats.forEach(item => {
         if (item._id === 'Sell Out') {
           result.ltd_sell_out = item['YTD VALUE'];
+          result.ltd_sell_out_volume = item['YTD VOLUME'];
         } else {
           result.ltd_sell_in = item['YTD VALUE'];
+          result.ltd_sell_in_volume = item['YTD VOLUME'];
         }
-      })
-
+      });
 
       result.sell_in_growth =
         result.ltd_sell_in !== 0 ?
@@ -542,90 +822,10 @@ exports.getSalesDashboardData = async (req, res) => {
           (result.td_sell_out - result.ltd_sell_out) / result.ltd_sell_out * 100
           : 0;
 
-      result.td_sell_in = formatNumber(result.td_sell_in);
-      result.ltd_sell_in = formatNumber(result.ltd_sell_in);
-      result.td_sell_out = formatNumber(result.td_sell_out);
-      result.ltd_sell_out = formatNumber(result.ltd_sell_out);
-      result.sell_in_growth = result.sell_in_growth + '%';
-      result.sell_out_growth = result.sell_out_growth + '%';
-    }
-
-    if (td_format === 'YTD' && data_format === 'volume') {
-      let lastYearSalesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: lytdStartDate, // Start of the previous year
-              $lte: lytdEndDate // End of the previous year's current month
-            },
-          }
-        },
-        {
-          $group: {
-            _id: "$SALES TYPE",
-            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
-          }
-        }
-      ]);
-
-
-      const lastDays = getLastDaysOfPreviousMonths()
-      const salesStats = await SalesData.aggregate([
-        {
-          $match: {
-            DATE: {
-              $gte: `${startYear}-01-01`, // Start of the current month
-              $lte: `${endYear}-${endMonth.toString().padStart(2, '0')}-${presentDayOfMonth}` // End of the current month
-            }
-          }
-        },
-        {
-          $group: {
-            _id: "$SALES TYPE",
-            "YTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }
-          }
-        },
-      ]);
-
-      if (lastYearSalesStats.length <= 0) {
-        lastYearSalesStats = [
-          { _id: 'Sell Thru2', 'YTD VOLUME': 0 },
-          { _id: 'Sell Out', 'YTD VOLUME': 0 }
-        ]
-      }
-
-      // console.log("lastYearSalesStats : ", lastYearSalesStats);
-      // console.log("salesStats : ", salesStats);
-      salesStats.forEach(item => {
-        if (item._id === 'Sell Out') {
-          result.td_sell_out = item['YTD VOLUME'];
-        } else {
-          result.td_sell_in = item['YTD VOLUME'];
-        }
-      })
-      lastYearSalesStats.forEach(item => {
-        if (item._id === 'Sell Out') {
-          result.ltd_sell_out = item['YTD VOLUME'];
-        } else {
-          result.ltd_sell_in = item['YTD VOLUME'];
-        }
-      })
-
-
-      result.sell_in_growth =
-        result.ltd_sell_in !== 0 ?
-          (result.td_sell_in - result.ltd_sell_in) / result.ltd_sell_in * 100
-          : 0;
-
-      result.sell_out_growth =
-        result.ltd_sell_out !== 0 ?
-          (result.td_sell_out - result.ltd_sell_out) / result.ltd_sell_out * 100
-          : 0;
-
-      result.td_sell_in = formatNumber(result.td_sell_in);
-      result.ltd_sell_in = formatNumber(result.ltd_sell_in);
-      result.td_sell_out = formatNumber(result.td_sell_out);
-      result.ltd_sell_out = formatNumber(result.ltd_sell_out);
+      result.td_sell_in = formatNumberIndian(result.td_sell_in);
+      result.ltd_sell_in = formatNumberIndian(result.ltd_sell_in);
+      result.td_sell_out = formatNumberIndian(result.td_sell_out);
+      result.ltd_sell_out = formatNumberIndian(result.ltd_sell_out);
       result.sell_in_growth = result.sell_in_growth + '%';
       result.sell_out_growth = result.sell_out_growth + '%';
     }
@@ -636,6 +836,8 @@ exports.getSalesDashboardData = async (req, res) => {
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
+
+
 
 exports.getChannelSalesDataAreaWise = async (req, res) => {
   try {

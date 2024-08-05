@@ -69,3 +69,17 @@ exports.parseDate = (dateString) => {
   const [month, day, year] = dateString.split('/');
   return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
 };
+
+
+exports.formatNumberIndian = (num) => {
+  if (num >= 1e7) {
+    return (num / 1e7).toFixed(2) + ' Cr';
+  }
+  if (num >= 1e5) {
+    return (num / 1e5).toFixed(2) + ' L';
+  }
+  if (num >= 1e3) {
+    return (num / 1e3).toFixed(2) + ' K';
+  }
+  return num.toString();
+};
