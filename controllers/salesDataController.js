@@ -12,7 +12,8 @@ const {
   calculateExtrapolated,
   calculateGrowth,
   calculateRequiredAds,
-  categorizePriceBand
+  categorizePriceBand,
+  fetchTargetValuesAndVolumes,
 } = require('../helpers/reportHelpers');
 
 const { staticSegments,
@@ -23,6 +24,7 @@ const { staticSegments,
         staticASMNames, 
         staticTSENames 
       } = require('../helpers/constants');
+const SegmentTarget = require("../models/SegmentTarget");
 
 
 
@@ -1850,6 +1852,185 @@ exports.getSalesDataSegmentWiseTSE = async (req, res) => {
 
 
 // NEW APIs
+// exports.getSegmentDataForZSM = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, zsm } = req.query;
+
+//     if (!zsm) return res.status(400).send({ error: "ZSM parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     const targetValues = {
+//       "100K": 82729425,
+//       "70-100K": 30461652,
+//       "40-70K": 25169124,
+//       "30-40K": 27633511,
+//       "20-30K": 11072500,
+//       "15-20K": 33387787,
+//       "10-15K": 14580195,
+//       "6-10K": 9291145,
+//       "Tab >40K": 5202269,
+//       "Tab <40K": 3844941,
+//       "Wearable": 2676870
+//     };
+
+//     const targetVolumes = {
+//         "100K": 574,
+//         "70-100K": 347,
+//         "40-70K": 454,
+//         "30-40K": 878,
+//         "20-30K": 423,
+//         "15-20K": 1947,
+//         "10-15K": 1027,
+//         "6-10K": 1020,
+//         "Tab >40K": 231,
+//         "Tab <40K": 59,
+//         "Wearable": 130
+//     }
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ZSM": zsm,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data seperately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ZSM": zsm,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+      
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
+
 exports.getSegmentDataForZSM = async (req, res) => {
   try {
     let { start_date, end_date, data_format, zsm } = req.query;
@@ -1874,42 +2055,10 @@ exports.getSegmentDataForZSM = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
 
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+    // Use the helper function to fetch target values and volumes
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, zsm, "ZSM");
 
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
-    const targetValues = {
-      "100K": 82729425,
-      "70-100K": 30461652,
-      "40-70K": 25169124,
-      "30-40K": 27633511,
-      "20-30K": 11072500,
-      "15-20K": 33387787,
-      "10-15K": 14580195,
-      "6-10K": 9291145,
-      "Tab >40K": 5202269,
-      "Tab <40K": 3844941,
-      "Wearable": 2676870
-    };
-
-    const targetVolumes = {
-        "100K": 574,
-        "70-100K": 347,
-        "40-70K": 454,
-        "30-40K": 878,
-        "20-30K": 423,
-        "15-20K": 1947,
-        "10-15K": 1027,
-        "6-10K": 1020,
-        "Tab >40K": 231,
-        "Tab <40K": 59,
-        "Wearable": 130
-    }
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -2062,33 +2211,9 @@ exports.getSegmentDataForABM = async (req, res) => {
     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
-    const targetValues = {
-      "100K": 82729425,
-      "70-100K": 30461652,
-      "40-70K": 25169124,
-      "30-40K": 27633511,
-      "20-30K": 11072500,
-      "15-20K": 33387787,
-      "10-15K": 14580195,
-      "6-10K": 9291145,
-      "Tab >40K": 5202269,
-      "Tab <40K": 3844941,
-      "Wearable": 2676870
-    };
+    // Use the helper function to fetch target values and volumes
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, abm, "ABM");
 
-    const targetVolumes = {
-        "100K": 574,
-        "70-100K": 347,
-        "40-70K": 454,
-        "30-40K": 878,
-        "20-30K": 423,
-        "15-20K": 1947,
-        "10-15K": 1027,
-        "6-10K": 1020,
-        "Tab >40K": 231,
-        "Tab <40K": 59,
-        "Wearable": 130
-    }
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -2418,33 +2543,9 @@ exports.getSegmentDataForASE = async (req, res) => {
     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
-    const targetValues = {
-      "100K": 82729425,
-      "70-100K": 30461652,
-      "40-70K": 25169124,
-      "30-40K": 27633511,
-      "20-30K": 11072500,
-      "15-20K": 33387787,
-      "10-15K": 14580195,
-      "6-10K": 9291145,
-      "Tab >40K": 5202269,
-      "Tab <40K": 3844941,
-      "Wearable": 2676870
-    };
+    // Use the helper function to fetch target values and volumes
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, ase, "ASE");
 
-    const targetVolumes = {
-        "100K": 574,
-        "70-100K": 347,
-        "40-70K": 454,
-        "30-40K": 878,
-        "20-30K": 423,
-        "15-20K": 1947,
-        "10-15K": 1027,
-        "6-10K": 1020,
-        "Tab >40K": 231,
-        "Tab <40K": 59,
-        "Wearable": 130
-    }
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -2596,33 +2697,9 @@ exports.getSegmentDataForASM = async (req, res) => {
     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
-    const targetValues = {
-      "100K": 82729425,
-      "70-100K": 30461652,
-      "40-70K": 25169124,
-      "30-40K": 27633511,
-      "20-30K": 11072500,
-      "15-20K": 33387787,
-      "10-15K": 14580195,
-      "6-10K": 9291145,
-      "Tab >40K": 5202269,
-      "Tab <40K": 3844941,
-      "Wearable": 2676870
-    };
+    // Use the helper function to fetch target values and volumes
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, asm, "ASM");
 
-    const targetVolumes = {
-        "100K": 574,
-        "70-100K": 347,
-        "40-70K": 454,
-        "30-40K": 878,
-        "20-30K": 423,
-        "15-20K": 1947,
-        "10-15K": 1027,
-        "6-10K": 1020,
-        "Tab >40K": 231,
-        "Tab <40K": 59,
-        "Wearable": 130
-    }
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -2774,33 +2851,9 @@ exports.getSegmentDataForTSE = async (req, res) => {
     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
-    const targetValues = {
-      "100K": 82729425,
-      "70-100K": 30461652,
-      "40-70K": 25169124,
-      "30-40K": 27633511,
-      "20-30K": 11072500,
-      "15-20K": 33387787,
-      "10-15K": 14580195,
-      "6-10K": 9291145,
-      "Tab >40K": 5202269,
-      "Tab <40K": 3844941,
-      "Wearable": 2676870
-    };
+    // Use the helper function to fetch target values and volumes
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, tse, "TSE");
 
-    const targetVolumes = {
-        "100K": 574,
-        "70-100K": 347,
-        "40-70K": 454,
-        "30-40K": 878,
-        "20-30K": 423,
-        "15-20K": 1947,
-        "10-15K": 1027,
-        "6-10K": 1020,
-        "Tab >40K": 231,
-        "Tab <40K": 59,
-        "Wearable": 130
-    }
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([

@@ -1,3 +1,5 @@
+const SegmentTarget = require("../models/SegmentTarget");
+
 function filterSalesData(data, filterType, timePeriod) {
     // Implement your filter logic here based on filterType (Value/Volume) and timePeriod (MTD/YTD)
     return data.filter(row => {
@@ -68,3 +70,32 @@ function calculateContribution(row) {
     if (price > 6000) return '6-10K';
     return '6-10K'; // Default to the lowest range for prices <= 6000
   }
+
+const getMonthFromDate = (dateString) => {
+  const [month, , year] = dateString.split('/');
+  return `${month.padStart(2, '0')}/${year}`;
+};
+
+exports.fetchTargetValuesAndVolumes = async (endDate, name, category) => {
+  // Fetch target values and volumes from the database using a separate date variable
+  let targetDate = new Date(endDate);
+  const targetMonth = getMonthFromDate(targetDate.toLocaleDateString('en-US'));
+
+  // Format targetStartDate as M/D/YYYY
+  const [month, year] = targetMonth.split('/');
+  const targetStartDate = `${parseInt(month)}/1/${year}`;
+
+  const targets = await SegmentTarget.find({ Name: name, Category: category, 'Start Date': targetStartDate.toString() });
+
+  const targetValues = targets.reduce((acc, target) => {
+      acc[target.Segment] = parseInt(target['Target Value']);
+      return acc;
+  }, {});
+
+  const targetVolumes = targets.reduce((acc, target) => {
+      acc[target.Segment] = parseInt(target['Target Volume']);
+      return acc;
+  }, {});
+
+  return { targetValues, targetVolumes };
+};
