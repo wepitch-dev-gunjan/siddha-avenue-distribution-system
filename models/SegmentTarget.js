@@ -1,6 +1,6 @@
 const { Schema, model } = require("mongoose");
 
-const TargetSchema = new Schema(
+const SegmentTargetSchema = new Schema(
   {},
   {
     strict: false,
@@ -9,4 +9,4 @@ const TargetSchema = new Schema(
 
 // const Data = mongoose.model("Data", dataSchema);
 
-module.exports = model("Target", TargetSchema);
+module.exports = model("Segment Target", SegmentTargetSchema);

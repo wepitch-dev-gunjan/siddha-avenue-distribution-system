@@ -1,6 +1,6 @@
 const csvParser = require("csv-parser");
 const { Readable } = require("stream");
-const Target = require("../models/Target");
+const SegmentTarget = require("../models/SegmentTarget");
 
 
 // exports.uploadTargetData = async (req, res) => {
@@ -38,7 +38,7 @@ const Target = require("../models/Target");
 //     }
 // }
 
-exports.uploadTargetData = async (req, res) => {
+exports.uploadSegmentTargetData = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).send("No target file uploaded");
@@ -56,9 +56,9 @@ exports.uploadTargetData = async (req, res) => {
                 .on("end", async () => {
                     try {
                         for (let target of targets) {
-                            const { Name, Category, 'Target Value': targetValue, 'Target Volume': targetVolume, 'Start Date': startDate } = target;
+                            const { Name, Segment, 'Target Value': targetValue, 'Target Volume': targetVolume, 'Start Date': startDate, Category } = target;
 
-                            const existingTarget = await Target.findOne({ Name, 'Start Date': startDate });
+                            const existingTarget = await SegmentTarget.findOne({ Name, Segment, 'Start Date': startDate, Category });
 
                             if (existingTarget) {
                                 // Update the existing target if values differ
@@ -69,13 +69,13 @@ exports.uploadTargetData = async (req, res) => {
                                 }
                             } else {
                                 // Create a new target entry
-                                await Target.create({ Name, Category, 'Target Value': targetValue, 'Target Volume': targetVolume, 'Start Date': startDate });
+                                await SegmentTarget.create({ Name, Segment, 'Target Value': targetValue, 'Target Volume': targetVolume, 'Start Date': startDate, Category });
                             }
                         }
-                        res.status(200).send("Targets inserted/updated in the database!")
+                        res.status(200).send("Targets inserted/updated in the database!");
                     } catch (error) {
                         console.log(error);
-                        res.status(500).send("Error inserting targets into the database!")
+                        res.status(500).send("Error inserting targets into the database!");
                     }
                 });
         } else {
@@ -84,6 +84,6 @@ exports.uploadTargetData = async (req, res) => {
 
     } catch (error) {
         console.log(error);
-        res.status(500).send("Internal Server Error!")
+        res.status(500).send("Internal Server Error!");
     }
-}
+};
