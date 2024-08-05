@@ -1,6 +1,6 @@
 const express = require("express");
 const { upload } = require("../services/fileUpload");
-const { uploadSegmentTargetData } = require("../controllers/targetControllers");
+const { uploadSegmentTargetData } = require("../controllers/segmentTargetControllers");
 const router = express.Router();
 
 
