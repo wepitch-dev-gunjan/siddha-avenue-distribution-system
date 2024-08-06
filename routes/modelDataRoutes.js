@@ -4,6 +4,6 @@ const { uploadModelData, getSalesDataModelWise } = require("../controllers/model
 const router = express.Router();
 
 router.post("/model-data", upload.single("file"), uploadModelData);
-router.get("/model-data", getSalesDataModelWise)
+router.get("/model-data", getSalesDataModelWise);
 
 module.exports = router;

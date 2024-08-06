@@ -1053,7 +1053,6 @@ exports.getSalesDashboardData = async (req, res) => {
   }
 };
 
-
 exports.getChannelSalesDataAreaWise = async (req, res) => {
   try {
     let { td_format, start_date, end_date, data_format } = req.query;
