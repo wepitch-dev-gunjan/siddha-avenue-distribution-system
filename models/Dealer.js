@@ -96,7 +96,15 @@ const dealerSchema = new Schema({
   },
   specialNotes: {
     type: String,
-  }
+  },
+  position: {
+    type: String,
+    default: 'Dealer',
+  },
+  verified: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
   strict: false
