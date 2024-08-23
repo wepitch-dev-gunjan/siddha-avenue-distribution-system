@@ -224,6 +224,7 @@ exports.login = async (req, res) => {
       message: "User logged in successfully",
       token,
       verified: user.verified,
+      position: user.position,
     });
   } catch (error) {
     console.error(error);
