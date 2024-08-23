@@ -176,8 +176,8 @@ exports.register = async (req, res) => {
       { expiresIn: "7d" }
     );
     return res.status(201).json({
-      message: "user registeres successfully",
-      user: { name: user.name, email: user.email, verified: user.verified },
+      message: "user registered successfully",
+      user: { name: user.name, email: user.email, verified: user.verified, position: user.position },
       token,
     });
   } catch (error) {
