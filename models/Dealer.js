@@ -105,6 +105,9 @@ const dealerSchema = new Schema({
     type: Boolean,
     default: false,
   },
+  password: {
+    type: String,
+  },
 }, {
   timestamps: true,
   strict: false
