@@ -157,3 +157,83 @@ exports.isDealerVerified = async (req, res) => {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+exports.editDealer = async (req, res) => {
+  try {
+    const { dealer_id } = req;  // Assuming dealer_id is obtained from the request, e.g., via authentication middleware
+    const {
+      shopName,
+      shopArea,
+      shopAddress,
+      owner,
+      anniversaryDate,
+      otherImportantFamilyDates,
+      businessDetails,
+      specialNotes
+    } = req.body;
+
+    // Validate dealer ID
+    if (!dealer_id) {
+      return res.status(400).json({ error: 'Dealer ID is required.' });
+    }
+
+    // Find the dealer by ID
+    const dealer = await Dealer.findOne({ _id: dealer_id });
+
+    // If dealer is not found
+    if (!dealer) {
+      return res.status(404).json({ error: 'Dealer not found.' });
+    }
+
+    // Update only the fields that are allowed to be edited
+    if (shopName) dealer.shopName = shopName;
+    if (shopArea) dealer.shopArea = shopArea;
+    if (shopAddress) dealer.shopAddress = shopAddress;
+    if (owner) {
+      if (owner.name) dealer.owner.name = owner.name;
+      if (owner.position) dealer.owner.position = owner.position;
+      if (owner.contactNumber) dealer.owner.contactNumber = owner.contactNumber;
+      if (owner.email) {
+        return res.status(400).json({ error: 'Email cannot be edited.' });
+      }
+      if (owner.homeAddress) dealer.owner.homeAddress = owner.homeAddress;
+      if (owner.birthday) dealer.owner.birthday = owner.birthday;
+      if (owner.wife) {
+        if (owner.wife.name) dealer.owner.wife.name = owner.wife.name;
+        if (owner.wife.birthday) dealer.owner.wife.birthday = owner.wife.birthday;
+      }
+      if (owner.children) dealer.owner.children = owner.children;
+      if (owner.otherFamilyMembers) dealer.owner.otherFamilyMembers = owner.otherFamilyMembers;
+    }
+    if (anniversaryDate) dealer.anniversaryDate = anniversaryDate;
+    if (otherImportantFamilyDates) dealer.otherImportantFamilyDates = otherImportantFamilyDates;
+    if (businessDetails) {
+      if (businessDetails.typeOfBusiness) dealer.businessDetails.typeOfBusiness = businessDetails.typeOfBusiness;
+      if (businessDetails.yearsInBusiness) dealer.businessDetails.yearsInBusiness = businessDetails.yearsInBusiness;
+      if (businessDetails.preferredCommunicationMethod) dealer.businessDetails.preferredCommunicationMethod = businessDetails.preferredCommunicationMethod;
+    }
+    if (specialNotes) dealer.specialNotes = specialNotes;
+
+    // Save the updated dealer information
+    await dealer.save();
+
+    return res.status(200).json({
+      message: 'Dealer profile updated successfully.',
+      data: {
+        dealerCode: dealer.dealerCode,
+        shopName: dealer.shopName,
+        shopArea: dealer.shopArea,
+        shopAddress: dealer.shopAddress,
+        owner: dealer.owner,
+        anniversaryDate: dealer.anniversaryDate,
+        otherImportantFamilyDates: dealer.otherImportantFamilyDates,
+        businessDetails: dealer.businessDetails,
+        specialNotes: dealer.specialNotes
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
