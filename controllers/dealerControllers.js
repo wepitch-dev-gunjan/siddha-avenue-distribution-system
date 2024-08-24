@@ -158,3 +158,41 @@ exports.addDealer = async (req, res) => {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+exports.getDealer = async (req, res) => {
+  try {
+    const { dealer_id } = req;
+
+    // Validate that dealerCode is provided
+    if (!dealer_id) {
+      return res.status(400).json({ error: 'Dealer Id not found in the token!' });
+    }
+
+    // Find the dealer by dealerCode
+    const dealer = await Dealer.findOne({ _id : dealer_id });
+
+    // If dealer is not found
+    if (!dealer) {
+      return res.status(404).json({ error: 'Dealer not found.' });
+    }
+
+    // Return the dealer data excluding the password
+    return res.status(200).json({
+      message: 'Dealer retrieved successfully.',
+      data: {
+        dealerCode: dealer.dealerCode,
+        shopName: dealer.shopName,
+        shopArea: dealer.shopArea,
+        shopAddress: dealer.shopAddress,
+        owner: dealer.owner,
+        anniversaryDate: dealer.anniversaryDate,
+        otherImportantFamilyDates: dealer.otherImportantFamilyDates,
+        businessDetails: dealer.businessDetails,
+        specialNotes: dealer.specialNotes
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};

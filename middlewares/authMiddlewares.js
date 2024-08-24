@@ -2,6 +2,7 @@ const Role = require("../models/Role");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { SCOPES, oauth2Client } = require("../services/googleConfig");
+const Dealer = require("../models/Dealer");
 require("dotenv").config();
 const { JWT_SECRET } = process.env;
 
@@ -25,6 +26,35 @@ exports.userAuth = async (req, res, next) => {
     req.name = decoded.name;
     req.email = decoded.email;
     req.user_id = decoded.user_id;
+
+    next();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.dealerAuth = async (req, res, next) => {
+  try {
+    const token = req.header("Authorization");
+    if (!token) {
+      return res
+        .status(401)
+        .json({ error: "No token found, authorization denied" });
+    }
+
+    // Verify the token using your secret key
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const dealer = await Dealer.findOne({ _id: decoded.dealer_id });
+
+    if (!dealer) {
+      return res.status(401).json({ error: "Dealer not authorized" });
+    }
+
+    req.dealerCode = decoded.dealerCode;
+    req.ownerName = decoded.ownerName;
+    req.shopName = decoded.shopName;
+    req.dealer_id = decoded.dealer_id;
 
     next();
   } catch (error) {
