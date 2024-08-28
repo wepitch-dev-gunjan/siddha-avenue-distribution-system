@@ -80,6 +80,149 @@ exports.uploadSalesData = async (req, res) => {
   }
 };
 
+
+// Duplicate data removed wo postman testing setup
+// exports.uploadSalesData = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).send("No file uploaded");
+//     }
+
+//     let results = [];
+
+//     if (req.file.originalname.endsWith(".csv")) {
+//       // Parse CSV file
+//       const stream = new Readable();
+//       stream.push(req.file.buffer);
+//       stream.push(null);
+//       stream
+//         .pipe(csvParser())
+//         .on("data", (data) => results.push(data))
+//         .on("end", async () => {
+//           try {
+//             // Remove duplicate entries in the new data
+//             const uniqueResults = results.filter((item, index, self) =>
+//               index === self.findIndex((t) => (
+//                 Object.keys(t).every(key => t[key] === item[key])
+//               ))
+//             );
+
+//             // Check for duplicates against the database
+//             const existingData = await Data.find().lean(); // Fetch existing data from DB
+
+//             const nonDuplicateResults = uniqueResults.filter(newEntry => 
+//               !existingData.some(existingEntry =>
+//                 Object.keys(newEntry).every(key => newEntry[key] === existingEntry[key])
+//               )
+//             );
+
+//             // Insert non-duplicate data into MongoDB
+//             if (nonDuplicateResults.length > 0) {
+//               await Data.insertMany(nonDuplicateResults);
+//               // res.status(200).send("Data inserted into database");
+//               res.status(200).send(`${nonDuplicateResults.length} entries inserted into the database`);
+
+//             } else {
+//               res.status(200).send("No new data to insert");
+//             }
+//           } catch (error) {
+//             console.log(error);
+//             res.status(500).send("Error inserting data into database");
+//           }
+//         });
+//     } else {
+//       res.status(400).send("Unsupported file format");
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).send("Internal server error");
+//   }
+// };
+
+
+// Duplicate data removed in this api - but it takes time - >45 mins to upload 75k rows
+// exports.uploadSalesData = async (req, res) => {
+//   // Duplicate data removed in this api - but it takes time - >45 mins to upload 75k rows
+//   try {
+//     if (!req.file) {
+//       return res.status(400).send("No file uploaded");
+//     }
+
+//     let results = [];
+
+//     if (req.file.originalname.endsWith(".csv")) {
+//       // Start writing the response to the client
+//       res.writeHead(200, { 'Content-Type': 'text/plain' });
+
+//       // Parse CSV file
+//       const stream = new Readable();
+//       stream.push(req.file.buffer);
+//       stream.push(null);
+//       stream
+//         .pipe(csvParser())
+//         .on("data", (data) => {
+//           results.push(data);
+//           if (results.length % 100 === 0) {  // Adjust this value as needed for more or less frequent updates
+//             res.write(`Processed ${results.length} rows from the file...\n`);
+//           }
+//         })
+//         .on("end", async () => {
+//           try {
+//             res.write('Finished reading file. Removing duplicates in uploaded data...\n');
+
+//             // Remove duplicate entries in the new data
+//             const uniqueResults = results.filter((item, index, self) =>
+//               index === self.findIndex((t) => (
+//                 Object.keys(t).every(key => t[key] === item[key])
+//               ))
+//             );
+
+//             res.write(`Removed duplicates. ${uniqueResults.length} unique entries remaining.\n`);
+
+//             // Check for duplicates against the database
+//             res.write('Checking against existing database entries...\n');
+//             const existingData = await Data.find().lean(); // Fetch existing data from DB
+
+//             const nonDuplicateResults = uniqueResults.filter((newEntry, index) => {
+//               const isDuplicate = existingData.some(existingEntry =>
+//                 Object.keys(newEntry).every(key => newEntry[key] === existingEntry[key])
+//               );
+
+//               // Optional: Show progress during database check
+//               if (index % 100 === 0) {
+//                 res.write(`Checked ${index} unique entries against the database...\n`);
+//               }
+
+//               return !isDuplicate;
+//             });
+
+//             res.write(`Database check completed. ${nonDuplicateResults.length} new entries to insert.\n`);
+
+//             // Insert non-duplicate data into MongoDB
+//             if (nonDuplicateResults.length > 0) {
+//               await Data.insertMany(nonDuplicateResults);
+//               res.write(`${nonDuplicateResults.length} entries inserted into the database.\n`);
+//             } else {
+//               res.write("No new data to insert.\n");
+//             }
+
+//             res.end("Processing completed successfully.\n");
+//           } catch (error) {
+//             console.log(error);
+//             res.write("Error inserting data into the database.\n");
+//             res.end();
+//           }
+//         });
+//     } else {
+//       res.status(400).send("Unsupported file format");
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).send("Internal server error");
+//   }
+// };
+
+
 exports.getSalesDataChannelWise = async (req, res) => {
   try {
     let { td_format, start_date, end_date, data_format } = req.query;
@@ -2267,7 +2410,9 @@ exports.getSalesDataSegmentWiseTSE = async (req, res) => {
 };
 
 
-// NEW APIs
+
+
+
 // exports.getSegmentDataForZSM = async (req, res) => {
 //   try {
 //     let { start_date, end_date, data_format, zsm } = req.query;
@@ -2447,9 +2592,158 @@ exports.getSalesDataSegmentWiseTSE = async (req, res) => {
 //   }
 // };
 
+// exports.getSegmentDataForZSM = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, zsm } = req.query;
+//     console.log("Start date, End date, data_format, zsm: ", start_date, end_date, data_format, zsm)
+
+//     if (!zsm) return res.status(400).send({ error: "ZSM parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, zsm, "ZSM");
+
+
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ZSM": zsm,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data seperately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ZSM": zsm,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+      
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
+
 exports.getSegmentDataForZSM = async (req, res) => {
   try {
     let { start_date, end_date, data_format, zsm } = req.query;
+    console.log("Start date, End date, data_format, zsm: ", start_date, end_date, data_format, zsm);
 
     if (!zsm) return res.status(400).send({ error: "ZSM parameter is required" });
 
@@ -2474,8 +2768,6 @@ exports.getSegmentDataForZSM = async (req, res) => {
     // Use the helper function to fetch target values and volumes
     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, zsm, "ZSM");
 
-
-
     // Fetch sales data
     const salesData = await SalesData.aggregate([
       {
@@ -2483,8 +2775,8 @@ exports.getSegmentDataForZSM = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -2493,7 +2785,7 @@ exports.getSegmentDataForZSM = async (req, res) => {
         $match: {
           "SALES TYPE": "Sell Out",
           "ZSM": zsm,
-          parsedDate: {$gte: startDate, $lte: endDate}
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -2513,15 +2805,15 @@ exports.getSegmentDataForZSM = async (req, res) => {
       }
     ]);
 
-    // Find FTD data seperately 
+    // Find FTD data separately 
     const ftdData = await SalesData.aggregate([
       {
         $addFields: {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -2554,15 +2846,14 @@ exports.getSegmentDataForZSM = async (req, res) => {
       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
       const ftdSellOut = ftdSegmentData["FTD"] || 0;
-      
 
-      if (data_format === "value"){
+      if (data_format === "value") {
         return {
           _id: id,
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VALUE": targetValue,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VAL PENDING": targetValue - mtdSellOut,
@@ -2575,7 +2866,7 @@ exports.getSegmentDataForZSM = async (req, res) => {
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VOLUME": targetVolume,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VOL PENDING": targetVolume - mtdSellOut,
@@ -2583,8 +2874,66 @@ exports.getSegmentDataForZSM = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -2593,6 +2942,8 @@ exports.getSegmentDataForZSM = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
 
 exports.getSegmentDataForABM = async (req, res) => {
   try {
