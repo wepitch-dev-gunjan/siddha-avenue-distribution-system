@@ -1,7 +1,7 @@
 const { Readable } = require('stream');
 const csvParser = require('csv-parser');
 const { model } = require('mongoose');
-const EmployeeCode = require('../models/employeeCode');
+const EmployeeCode = require('../models/EmployeeCode');
 
 exports.uploadEmployeeCodes = async (req, res) => {
     try {

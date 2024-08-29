@@ -29,5 +29,8 @@
     "telesignsdk": "^2.2.3",
     "xlsx": "^0.18.5",
     "xslx": "^1.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
   }
 }
