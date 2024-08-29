@@ -3939,7 +3939,7 @@ exports.getSegmentDataForAllPositions = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).send("Internal Server Error");
+    res.status(500).send("Internal Server Error!");
   }
 };
 
