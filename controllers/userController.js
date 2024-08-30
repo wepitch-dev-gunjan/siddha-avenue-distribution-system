@@ -19,6 +19,8 @@ const { mongoose } = require("mongoose");
 const { transporter } = require("../services/forgotPassword");
 const { validationResult } = require("express-validator");
 const { log } = require("console");
+const EmployeeCode = require("../models/EmployeeCode");
+const Dealer = require("../models/Dealer");
 
 // Route to change password
 exports.resetPassword = async (req, res) => {
@@ -150,20 +152,72 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+// exports.register = async (req, res) => {
+//   try {
+//     const { name, email, password, position } = req.body;
+
+//     let user = await User.findOne({ email });
+//     if (user) return res.status(400).json({ message: "User Already Exist" });
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     user = new User({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       position,
+//     });
+//     await user.save();
+//     const token = jwt.sign(
+//       {
+//         user_id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         phone_number: user.phone_number,
+//         position: user.position,
+//       },
+//       JWT_SECRET,
+//       { expiresIn: "7d" }
+//     );
+//     return res.status(201).json({
+//       message: "user registered successfully",
+//       user: { name: user.name, email: user.email, verified: user.verified, position: user.position },
+//       token,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, position } = req.body;
+    const { email, password, code } = req.body;
 
-    let user = await User.findOne({ email });
+    // Step 1: Find user by code
+    let user = await User.findOne({ code });
     if (user) return res.status(400).json({ message: "User Already Exist" });
+
+    // Step 2: Find employee by code
+    const employee = await EmployeeCode.findOne({ Code: code });
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found with the given code" });
+    }
+
+    // Step 3: Extract name and position from employee
+    const { Name: name, Position: position } = employee;
+
+    // Step 4: Hash password and create new user
     const hashedPassword = await bcrypt.hash(password, 10);
     user = new User({
       name,
       email,
       password: hashedPassword,
+      code,
       position,
     });
+
     await user.save();
+
+    // Step 5: Generate token with role
     const token = jwt.sign(
       {
         user_id: user._id,
@@ -171,14 +225,23 @@ exports.register = async (req, res) => {
         email: user.email,
         phone_number: user.phone_number,
         position: user.position,
+        role: "employee", // Include role in the token payload
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    // Step 6: Return success response with role
     return res.status(201).json({
-      message: "user registered successfully",
-      user: { name: user.name, email: user.email, verified: user.verified, position: user.position },
+      message: "User registered successfully",
+      user: {
+        name: user.name,
+        email: user.email,
+        verified: user.verified,
+        position: user.position,
+      },
       token,
+      role: "employee", // Include the role in the response
     });
   } catch (error) {
     console.error(error);
@@ -186,45 +249,107 @@ exports.register = async (req, res) => {
   }
 };
 
+// exports.login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     if (!email || !password)
+//       return res.status(404).send({
+//         error: "Credentials are required",
+//       });
+
+//     // Find the user by email
+//     const user = await User.findOne({ email });
+//     console.log(user);
+//     if (!user) {
+//       return res
+//         .status(401)
+//         .json({ error: " User not  register with this email id" });
+//     }
+
+//     const passwordMatch = await bcrypt.compare(password, user.password);
+//     if (!passwordMatch) {
+//       return res.status(401).json({ error: "Invalid credentials" });
+//     }
+//     console.log(user);
+//     // Successful login
+//     const token = jwt.sign(
+//       {
+//         user_id: user._id,
+//         name: user.name,
+//         phone_number: user.phone_number,
+//         email: user.email,
+//         position: user.position,
+//       },
+//       JWT_SECRET,
+//       { expiresIn: "7d" }
+//     );
+//     res.status(201).json({
+//       message: "User logged in successfully",
+//       token,
+//       verified: user.verified,
+//       position: user.position,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(404).send({
-        error: "Credentials are required",
-      });
+    const { role, code, password } = req.body;
 
-    // Find the user by email
-    const user = await User.findOne({ email });
-    console.log(user);
-    if (!user) {
-      return res
-        .status(401)
-        .json({ error: " User not  register with this email id" });
+    // Validate required fields
+    if (!role || !code || !password) {
+      return res.status(400).json({ error: "All credentials are required" });
     }
 
+    let user;
+
+    // Check role and retrieve the appropriate user
+    if (role === "employee") {
+      // Find the user by code for employee
+      user = await User.findOne({ code });
+      if (!user) {
+        return res.status(401).json({ error: "User not registered with this code" });
+      }
+    } else if (role === "dealer") {
+      // Find the dealer by dealerCode for dealer
+      const dealer = await Dealer.findOne({ dealerCode: code });
+      if (!dealer) {
+        return res.status(401).json({ error: "Dealer not registered with this code" });
+      }
+      user = dealer; // Assign dealer object to user for consistent handling
+    } else {
+      return res.status(400).json({ error: "Invalid role" });
+    }
+
+    // Verify the password
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    console.log(user);
-    // Successful login
+
+    // Successful login, generate token
     const token = jwt.sign(
       {
         user_id: user._id,
-        name: user.name,
-        phone_number: user.phone_number,
-        email: user.email,
-        position: user.position,
+        name: user.name || user.owner?.name, // Adjust if user.name is not present in dealer
+        phone_number: user.phone_number || user.owner?.contactNumber, // Adjust as needed
+        code: user.code || user.dealerCode, // Adjust code for dealers
+        role, // Include role to identify the user type
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
-    res.status(201).json({
+
+    // Send response with role included
+    res.status(200).json({
       message: "User logged in successfully",
       token,
-      verified: user.verified,
-      position: user.position,
+      role, // Include the role in the response to differentiate dashboards
+      verified: user.verified || true, // Default to true if not present in dealer
+      position: user.position || "Dealer", // Default to 'Dealer' for dealers
     });
   } catch (error) {
     console.error(error);
@@ -452,6 +577,7 @@ exports.verifyOtpByPhone = async (req, res) => {
     res.status(500).send({ error: "Internal server error" });
   }
 };
+
 exports.getUserForUser = async (req, res) => {
   try {
     const { user_id } = req;

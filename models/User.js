@@ -14,6 +14,9 @@ const userSchema = new Schema(
     phone_number: {
       type: String,
     },
+    code: {
+      type: String,
+    },
     verified: {
       type: Boolean,
       default: true,
