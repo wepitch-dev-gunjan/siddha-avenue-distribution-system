@@ -305,6 +305,7 @@ exports.login = async (req, res) => {
     }
 
     let user;
+    let tokenPayload = {};
 
     // Check role and retrieve the appropriate user
     if (role === "employee") {
@@ -313,6 +314,16 @@ exports.login = async (req, res) => {
       if (!user) {
         return res.status(401).json({ error: "User not registered with this code" });
       }
+
+      // Set token payload for employee
+      tokenPayload = {
+        user_id: user._id,
+        name: user.name,
+        email: user.email,
+        phone_number: user.phone_number,
+        position: user.position,
+        role: "employee", // Include role in the token payload
+      };
     } else if (role === "dealer") {
       // Find the dealer by dealerCode for dealer
       const dealer = await Dealer.findOne({ dealerCode: code });
@@ -320,6 +331,15 @@ exports.login = async (req, res) => {
         return res.status(401).json({ error: "Dealer not registered with this code" });
       }
       user = dealer; // Assign dealer object to user for consistent handling
+
+      // Set token payload for dealer
+      tokenPayload = {
+        dealer_id: user._id,
+        name: user.owner.name, // Adjust if dealer.owner structure is different
+        shopName: user.shopName,
+        dealerCode: user.dealerCode,
+        role: "dealer", // Include role in the token payload
+      };
     } else {
       return res.status(400).json({ error: "Invalid role" });
     }
@@ -330,18 +350,8 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Successful login, generate token
-    const token = jwt.sign(
-      {
-        user_id: user._id,
-        name: user.name || user.owner?.name, // Adjust if user.name is not present in dealer
-        phone_number: user.phone_number || user.owner?.contactNumber, // Adjust as needed
-        code: user.code || user.dealerCode, // Adjust code for dealers
-        role, // Include role to identify the user type
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    // Generate token
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "7d" });
 
     // Send response with role included
     res.status(200).json({
