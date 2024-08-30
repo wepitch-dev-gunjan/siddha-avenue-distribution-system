@@ -3739,10 +3739,10 @@ exports.getSegmentDataForTSE = async (req, res) => {
 
 exports.getSegmentDataForDealer = async (req, res) => {
   try {
-    let { start_date, end_date, data_format, zsm } = req.query;
-    console.log("Start date, End date, data_format, zsm: ", start_date, end_date, data_format, zsm);
+    let { start_date, end_date, data_format, dealer_code } = req.query;
+    console.log("Start date, End date, data_format, dealer_code: ", start_date, end_date, data_format, dealer_code);
 
-    if (!zsm) return res.status(400).send({ error: "ZSM parameter is required" });
+    if (!dealer_code) return res.status(400).send({ error: "Dealer parameter is required" });
 
     if (!data_format) data_format = "value";
 
@@ -3763,7 +3763,7 @@ exports.getSegmentDataForDealer = async (req, res) => {
     const daysPassed = endDate.getDate();
 
     // Use the helper function to fetch target values and volumes
-    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, zsm, "ZSM");
+    const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, dealer_code, "BUYER CODE");
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3781,7 +3781,7 @@ exports.getSegmentDataForDealer = async (req, res) => {
       {
         $match: {
           "SALES TYPE": "Sell Out",
-          "ZSM": zsm,
+          "BUYER CODE": dealer_code,
           parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
@@ -3818,7 +3818,7 @@ exports.getSegmentDataForDealer = async (req, res) => {
       {
         $match: {
           "SALES TYPE": "Sell Out",
-          "ZSM": zsm,
+          "BUYER CODE": dealer_code,
           parsedDate: endDate
         }
       },
