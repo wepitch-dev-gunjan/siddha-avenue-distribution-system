@@ -289,7 +289,11 @@ exports.isDealerVerified = async (req, res) => {
     // Return the verified status of the dealer
     return res.status(200).json({
       message: 'Dealer verification status retrieved successfully.',
-      verified: dealer.verified
+      verified: dealer.verified,
+      role: 'dealer',
+      code: dealer.dealerCode,
+      name: dealer.owner.name
+
     });
   } catch (error) {
     console.error(error);
