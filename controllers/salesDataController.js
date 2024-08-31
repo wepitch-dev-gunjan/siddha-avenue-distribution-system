@@ -3182,6 +3182,160 @@ exports.getSegmentDataForZSM = async (req, res) => {
   }
 };
 
+// exports.getSegmentDataForABM = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, abm } = req.query;
+
+//     if (!abm) return res.status(400).send({ error: "ABM parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, abm, "ABM");
+
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ABM": abm,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ABM": abm,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
+
 exports.getSegmentDataForABM = async (req, res) => {
   try {
     let { start_date, end_date, data_format, abm } = req.query;
@@ -3206,18 +3360,8 @@ exports.getSegmentDataForABM = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
 
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
-
     // Use the helper function to fetch target values and volumes
     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, abm, "ABM");
-
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3226,8 +3370,8 @@ exports.getSegmentDataForABM = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3236,7 +3380,7 @@ exports.getSegmentDataForABM = async (req, res) => {
         $match: {
           "SALES TYPE": "Sell Out",
           "ABM": abm,
-          parsedDate: {$gte: startDate, $lte: endDate}
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -3263,8 +3407,8 @@ exports.getSegmentDataForABM = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3298,13 +3442,13 @@ exports.getSegmentDataForABM = async (req, res) => {
       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
       const ftdSellOut = ftdSegmentData["FTD"] || 0;
 
-      if (data_format === "value"){
+      if (data_format === "value") {
         return {
           _id: id,
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VALUE": targetValue,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VAL PENDING": targetValue - mtdSellOut,
@@ -3317,7 +3461,7 @@ exports.getSegmentDataForABM = async (req, res) => {
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VOLUME": targetVolume,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VOL PENDING": targetVolume - mtdSellOut,
@@ -3325,8 +3469,66 @@ exports.getSegmentDataForABM = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -3335,6 +3537,185 @@ exports.getSegmentDataForABM = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+// exports.getSegmentDataForRSO = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, rso } = req.query;
+
+//     if (!rso) return res.status(400).send({ error: "RSO parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     const targetValues = {
+//       "100K": 82729425,
+//       "70-100K": 30461652,
+//       "40-70K": 25169124,
+//       "30-40K": 27633511,
+//       "20-30K": 11072500,
+//       "15-20K": 33387787,
+//       "10-15K": 14580195,
+//       "6-10K": 9291145,
+//       "Tab >40K": 5202269,
+//       "Tab <40K": 3844941,
+//       "Wearable": 2676870
+//     };
+
+//     const targetVolumes = {
+//         "100K": 574,
+//         "70-100K": 347,
+//         "40-70K": 454,
+//         "30-40K": 878,
+//         "20-30K": 423,
+//         "15-20K": 1947,
+//         "10-15K": 1027,
+//         "6-10K": 1020,
+//         "Tab >40K": 231,
+//         "Tab <40K": 59,
+//         "Wearable": 130
+//     }
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "RSO": rso,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "RSO": rso,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
 
 exports.getSegmentDataForRSO = async (req, res) => {
   try {
@@ -3359,15 +3740,6 @@ exports.getSegmentDataForRSO = async (req, res) => {
     const currentYear = endDate.getFullYear();
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
-
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
 
     const targetValues = {
       "100K": 82729425,
@@ -3395,7 +3767,7 @@ exports.getSegmentDataForRSO = async (req, res) => {
         "Tab >40K": 231,
         "Tab <40K": 59,
         "Wearable": 130
-    }
+    };
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3404,8 +3776,8 @@ exports.getSegmentDataForRSO = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3414,7 +3786,7 @@ exports.getSegmentDataForRSO = async (req, res) => {
         $match: {
           "SALES TYPE": "Sell Out",
           "RSO": rso,
-          parsedDate: {$gte: startDate, $lte: endDate}
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -3441,8 +3813,8 @@ exports.getSegmentDataForRSO = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3503,8 +3875,66 @@ exports.getSegmentDataForRSO = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -3513,6 +3943,161 @@ exports.getSegmentDataForRSO = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+// exports.getSegmentDataForASE = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, ase } = req.query;
+
+//     if (!ase) return res.status(400).send({ error: "ASE parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, ase, "ASE");
+
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ASE": ase,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ASE": ase,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
 
 exports.getSegmentDataForASE = async (req, res) => {
   try {
@@ -3538,18 +4123,8 @@ exports.getSegmentDataForASE = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
 
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
-
     // Use the helper function to fetch target values and volumes
     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, ase, "ASE");
-
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3657,8 +4232,66 @@ exports.getSegmentDataForASE = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -3667,6 +4300,161 @@ exports.getSegmentDataForASE = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+// exports.getSegmentDataForASM = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, asm } = req.query;
+
+//     if (!asm) return res.status(400).send({ error: "ASM parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, asm, "ASM");
+
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ASM": asm,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "ASM": asm,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
 
 exports.getSegmentDataForASM = async (req, res) => {
   try {
@@ -3692,18 +4480,8 @@ exports.getSegmentDataForASM = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
 
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
-
     // Use the helper function to fetch target values and volumes
     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, asm, "ASM");
-
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3722,7 +4500,7 @@ exports.getSegmentDataForASM = async (req, res) => {
         $match: {
           "SALES TYPE": "Sell Out",
           "ASM": asm,
-          parsedDate: {$gte: startDate, $lte: endDate}
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -3784,13 +4562,13 @@ exports.getSegmentDataForASM = async (req, res) => {
       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
       const ftdSellOut = ftdSegmentData["FTD"] || 0;
 
-      if (data_format === "value"){
+      if (data_format === "value") {
         return {
           _id: id,
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VALUE": targetValue,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VAL PENDING": targetValue - mtdSellOut,
@@ -3803,7 +4581,7 @@ exports.getSegmentDataForASM = async (req, res) => {
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VOLUME": targetVolume,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VOL PENDING": targetVolume - mtdSellOut,
@@ -3811,8 +4589,66 @@ exports.getSegmentDataForASM = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -3821,6 +4657,161 @@ exports.getSegmentDataForASM = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+// exports.getSegmentDataForTSE = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, tse } = req.query;
+
+//     if (!tse) return res.status(400).send({ error: "TSE parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Calculate the last month's corresponding date range for LMTD comparison
+//     let lastMonthStartDate = new Date(startDate);
+//     lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
+//     lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
+
+//     let lastMonthEndDate = new Date(endDate);
+//     lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
+//     lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, tse, "TSE");
+
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "TSE": tse,
+//           parsedDate: {$gte: startDate, $lte: endDate}
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y", // Define the format of the date strings in your dataset
+//               timezone: "UTC" // Specify timezone if necessary
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "TSE": tse,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value"){
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD" : ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+
+//     });
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
 
 exports.getSegmentDataForTSE = async (req, res) => {
   try {
@@ -3846,18 +4837,8 @@ exports.getSegmentDataForTSE = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysPassed = endDate.getDate();
 
-    // Calculate the last month's corresponding date range for LMTD comparison
-    let lastMonthStartDate = new Date(startDate);
-    lastMonthStartDate.setMonth(lastMonthStartDate.getMonth() - 1);
-    lastMonthStartDate = parseDate(lastMonthStartDate.toLocaleDateString('en-US'));
-
-    let lastMonthEndDate = new Date(endDate);
-    lastMonthEndDate.setMonth(lastMonthEndDate.getMonth() - 1);
-    lastMonthEndDate = parseDate(lastMonthEndDate.toLocaleDateString('en-US'));
-
     // Use the helper function to fetch target values and volumes
     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, tse, "TSE");
-
 
     // Fetch sales data
     const salesData = await SalesData.aggregate([
@@ -3866,8 +4847,8 @@ exports.getSegmentDataForTSE = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3876,7 +4857,7 @@ exports.getSegmentDataForTSE = async (req, res) => {
         $match: {
           "SALES TYPE": "Sell Out",
           "TSE": tse,
-          parsedDate: {$gte: startDate, $lte: endDate}
+          parsedDate: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -3903,8 +4884,8 @@ exports.getSegmentDataForTSE = async (req, res) => {
           parsedDate: {
             $dateFromString: {
               dateString: "$DATE",
-              format: "%m/%d/%Y", // Define the format of the date strings in your dataset
-              timezone: "UTC" // Specify timezone if necessary
+              format: "%m/%d/%Y",
+              timezone: "UTC"
             }
           }
         }
@@ -3938,13 +4919,13 @@ exports.getSegmentDataForTSE = async (req, res) => {
       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
       const ftdSellOut = ftdSegmentData["FTD"] || 0;
 
-      if (data_format === "value"){
+      if (data_format === "value") {
         return {
           _id: id,
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VALUE": targetValue,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VAL PENDING": targetValue - mtdSellOut,
@@ -3957,7 +4938,7 @@ exports.getSegmentDataForTSE = async (req, res) => {
           "MTD SELL OUT": mtdSellOut,
           "LMTD SELL OUT": lmtSellOut,
           "TARGET VOLUME": targetVolume,
-          "FTD" : ftdSellOut,
+          "FTD": ftdSellOut,
           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
           "VOL PENDING": targetVolume - mtdSellOut,
@@ -3965,8 +4946,66 @@ exports.getSegmentDataForTSE = async (req, res) => {
           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
         };
       }
-
     });
+
+    // Calculate the grand total row based on the data format
+    let grandTotal;
+    if (data_format === "value") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+        totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VALUE": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VAL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "value"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    } else if (data_format === "volume") {
+      grandTotal = resultData.reduce((totals, segment) => {
+        totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+        totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+        totals["FTD"] += segment["FTD"] || 0;
+        totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+        totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+        return totals;
+      }, {
+        "_id": "Grand Total",
+        "MTD SELL OUT": 0,
+        "LMTD SELL OUT": 0,
+        "FTD": 0,
+        "TARGET VOLUME": 0,
+        "AVERAGE DAY SALE": 0,
+        "DAILY REQUIRED AVERAGE": 0,
+        "VOL PENDING": 0,
+        "CONTRIBUTION %": 0,
+        "% GWTH": 0
+      });
+
+      // Calculate derived fields for "volume"
+      grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+      grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+      grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+      grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+    }
+
+    // Add the grand total as the first row in resultData
+    resultData.unshift(grandTotal);
 
     res.status(200).json(resultData);
 
@@ -3978,6 +5017,8 @@ exports.getSegmentDataForTSE = async (req, res) => {
 
 
 // Segment wise APIs for dealer 
+
+
 exports.getSegmentDataForDealer = async (req, res) => {
   try {
     let { start_date, end_date, data_format, dealer_code } = req.query;
