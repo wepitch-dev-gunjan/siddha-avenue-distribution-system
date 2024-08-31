@@ -1,4 +1,5 @@
 const SegmentTarget = require("../models/SegmentTarget");
+const ChannelTarget = require("../models/ChannelTarget");
 
 function filterSalesData(data, filterType, timePeriod) {
     // Implement your filter logic here based on filterType (Value/Volume) and timePeriod (MTD/YTD)
@@ -99,6 +100,34 @@ exports.fetchTargetValuesAndVolumes = async (endDate, name, category) => {
 
   return { targetValues, targetVolumes };
 };
+
+exports.fetchTargetValuesAndVolumesByChannel = async (endDate, name, category) => {
+  // Create a new date object for the target date based on the provided end date
+  let targetDate = new Date(endDate);
+  const targetMonth = getMonthFromDate(targetDate.toLocaleDateString('en-US'));
+
+  // Format targetStartDate as M/D/YYYY
+  const [month, year] = targetMonth.split('/');
+  const targetStartDate = `${parseInt(month)}/1/${year}`;
+
+  // Fetch target values and volumes for the specified name, category, and start date
+  const targets = await ChannelTarget.find({ Name: name, Category: category, 'Start Date': targetStartDate.toString() });
+
+  // Extract target values by channel
+  const targetValuesByChannel = targets.reduce((acc, target) => {
+      acc[target.Channel] = parseInt(target['Target Value']);
+      return acc;
+  }, {});
+
+  // Extract target volumes by channel
+  const targetVolumesByChannel = targets.reduce((acc, target) => {
+      acc[target.Channel] = parseInt(target['Target Volume']);
+      return acc;
+  }, {});
+
+  return { targetValuesByChannel, targetVolumesByChannel };
+};
+
 
 exports.getMonthFromDateExported = (dateString) => {
   const [month, , year] = dateString.split('/');

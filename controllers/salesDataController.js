@@ -14,6 +14,7 @@ const {
   calculateRequiredAds,
   categorizePriceBand,
   fetchTargetValuesAndVolumes,
+  fetchTargetValuesAndVolumesByChannel,
 } = require('../helpers/reportHelpers');
 
 const { staticSegments,
@@ -27,7 +28,7 @@ const { staticSegments,
 const SegmentTarget = require("../models/SegmentTarget");
 
 
-
+// Upload sales data APIs 
 exports.uploadSalesData = async (req, res) => {
   try {
     if (!req.file) {
@@ -138,8 +139,6 @@ exports.uploadSalesData = async (req, res) => {
 //     res.status(500).send("Internal server error");
 //   }
 // };
-
-
 // Duplicate data removed in this api - but it takes time - >45 mins to upload 75k rows
 // exports.uploadSalesData = async (req, res) => {
 //   // Duplicate data removed in this api - but it takes time - >45 mins to upload 75k rows
@@ -223,6 +222,7 @@ exports.uploadSalesData = async (req, res) => {
 // };
 
 
+// Channel wise APIs
 exports.getSalesDataChannelWise = async (req, res) => {
   try {
     let { td_format, start_date, end_date, data_format } = req.query;
@@ -470,6 +470,243 @@ exports.getSalesDataChannelWise = async (req, res) => {
   }
 };
 
+exports.getSalesDataChannelWiseForEmployee = async (req, res) => {
+  try {
+    // Destructure the necessary parameters from the query
+    let { td_format, start_date, end_date, data_format, name, position } = req.query;
+    let startYear, startMonth, endMonth, endYear; // Declare year and month variables for further calculations
+
+    // Check if 'name' and 'position' are provided
+    if (!name || !position) {
+      return res.status(400).send({ error: "Name and position parameters are required" });
+    }
+
+    // Set default values for optional parameters
+    if (!td_format) td_format = 'MTD';
+
+    // Set startDate to either provided start_date or the first day of the current month
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date(); // Set endDate to provided end_date or today
+
+    // Helper function to parse dates in MM/DD/YYYY format
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    // Parse startDate and endDate to ensure they are in the correct format
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    // Extract year and month from the startDate and endDate for filtering and calculations
+    startYear = startDate.getFullYear();
+    startMonth = startDate.getMonth() + 1; // Month is zero-based in JavaScript
+    endYear = endDate.getFullYear();
+    endMonth = endDate.getMonth() + 1;
+
+    const presentDayOfMonth = new Date().getDate();
+
+    // Fetch targets based on the given name and position
+    const { targetValuesByChannel, targetVolumesByChannel } = await fetchTargetValuesAndVolumesByChannel(endDate, name, position);
+    
+    // Handling 'value' data format
+    if (data_format === 'value') {
+      const salesStats = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            parsedDate: { $gte: startDate, $lte: endDate }, // Filter based on date range
+            "SALES TYPE": "Sell Out", // Filter to include only 'Sell Out' sales type
+            [position]: name // Dynamically match based on provided position and name
+          }
+        },
+        {
+          $group: {
+            _id: "$CHANNEL",
+            "TARGET VALUE": { $sum: { $toInt: "$TARGET VALUE" } }, // Sum of target values for aggregation
+            "MTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }, // Sum of MTD values
+            "LMTD VALUE": { $sum: { $toInt: "$LMTD VALUE" } } // Sum of LMTD values
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalMTDSellOut: { $sum: "$MTD VALUE" }, // Calculate total MTD Sell Out across channels
+            channelsData: { $push: "$$ROOT" } // Push each channel data to an array
+          }
+        },
+        {
+          $unwind: "$channelsData" // Unwind channelsData to process each channel individually
+        },
+        {
+          $project: {
+            "Channel": "$channelsData._id",
+            "Last Month ACH": { $ifNull: ["$channelsData.LMTD VALUE", 0] }, // Handle cases where LMTD VALUE might be null
+            "Contribution": {
+              $cond: {
+                if: { $eq: ["$totalMTDSellOut", 0] },
+                then: 0,
+                else: {
+                  $multiply: [
+                    { $divide: [{ $ifNull: ["$channelsData.MTD VALUE", 0] }, "$totalMTDSellOut"] },
+                    100
+                  ]
+                }
+              }
+            },
+            "TGT": {
+              $ifNull: [
+                targetValuesByChannel["$channelsData._id"] || 0, // Use the target value fetched by channel
+                "$channelsData.TARGET VALUE"
+              ]
+            }
+          }
+        },
+        {
+          $sort: { "Contribution": -1 } // Sort channels by contribution descending
+        }
+      ]);
+
+      // Sorting based on custom channel order
+      salesStats.sort((a, b) => {
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+        return (indexA === -1 && indexB === -1) ? 0 : (indexA === -1 ? 1 : (indexB === -1 ? -1 : indexA - indexB));
+      });
+
+      const formatValue = (value) => {
+        if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+        else if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
+        else return value.toString();
+      };
+
+      const formattedSalesStats = salesStats.map(item => ({
+        ...item,
+        "TGT": formatValue(item["TGT"]),
+        "Last Month ACH": formatValue(item["Last Month ACH"]),
+        "Contribution": `${item["Contribution"].toFixed(2)}%`
+      }));
+
+      if (!formattedSalesStats || formattedSalesStats.length === 0) {
+        return res.status(404).send({ error: "Data not found" });
+      }
+
+      return res.status(200).send(formattedSalesStats);
+    }
+
+    // Handling 'volume' data format
+    if (data_format === 'volume') {
+      const salesStats = await SalesData.aggregate([
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: "$DATE",
+                format: "%m/%d/%Y",
+                timezone: "UTC"
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            "SALES TYPE": "Sell Out",
+            parsedDate: { $gte: startDate, $lte: endDate },
+            [position]: name // Dynamically match based on provided position and name
+          }
+        },
+        {
+          $group: {
+            _id: "$CHANNEL",
+            "TARGET VOLUME": { $sum: { $toInt: "$TARGET VOLUME" } }, // Sum of target volumes for aggregation
+            "MTD VOLUME": { $sum: { $toInt: "$MTD VOLUME" } }, // Sum of MTD volumes
+            "LMTD VOLUME": { $sum: { $toInt: "$LMTD VOLUME" } } // Sum of LMTD volumes
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalMTDSellOut: { $sum: "$MTD VOLUME" }, // Calculate total MTD Sell Out volumes across channels
+            channelsData: { $push: "$$ROOT" }
+          }
+        },
+        {
+          $unwind: "$channelsData"
+        },
+        {
+          $project: {
+            "Channel": "$channelsData._id",
+            "Last Month ACH": { $ifNull: ["$channelsData.LMTD VOLUME", 0] },
+            "Contribution": {
+              $cond: {
+                if: { $eq: ["$totalMTDSellOut", 0] },
+                then: 0,
+                else: {
+                  $multiply: [
+                    { $divide: [{ $ifNull: ["$channelsData.MTD VOLUME", 0] }, "$totalMTDSellOut"] },
+                    100
+                  ]
+                }
+              }
+            },
+            "TGT": {
+              $ifNull: [
+                targetVolumesByChannel["$channelsData._id"] || 0, // Use the target volume fetched by channel
+                "$channelsData.TARGET VOLUME"
+              ]
+            }
+          }
+        },
+        {
+          $sort: { "Contribution": -1 }
+        }
+      ]);
+
+      // Sorting based on custom channel order
+      salesStats.sort((a, b) => {
+        const indexA = channelOrder.indexOf(a.Channel);
+        const indexB = channelOrder.indexOf(b.Channel);
+        return (indexA === -1 && indexB === -1) ? 0 : (indexA === -1 ? 1 : (indexB === -1 ? -1 : indexA - indexB));
+      });
+
+      const formatValue = (value) => {
+        if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+        else if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
+        else return value.toString();
+      };
+
+      const formattedSalesStats = salesStats.map(item => ({
+        ...item,
+        "TGT": formatValue(item["TGT"]),
+        "Last Month ACH": formatValue(item["Last Month ACH"]),
+        "Contribution": `${item["Contribution"].toFixed(2)}%`
+      }));
+
+      if (!formattedSalesStats || formattedSalesStats.length === 0) {
+        return res.status(404).send({ error: "Data not found" });
+      }
+
+      return res.status(200).send(formattedSalesStats);
+    }
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
+
+// Dashboard APIs
 // exports.getSalesDashboardData = async (req, res) => {
 //   try {
 //     let { td_format, start_date, end_date, data_format } = req.query;
@@ -1302,6 +1539,8 @@ exports.getChannelSalesDataAreaWise = async (req, res) => {
   }
 };
 
+
+// not getting used APIs
 exports.getSalesDataSegmentWise = async (req, res) => {
   try {
     let { start_date, end_date, data_format } = req.query;
@@ -2412,7 +2651,7 @@ exports.getSalesDataSegmentWiseTSE = async (req, res) => {
 
 
 
-
+// Segment wise APIs
 // exports.getSegmentDataForZSM = async (req, res) => {
 //   try {
 //     let { start_date, end_date, data_format, zsm } = req.query;
@@ -3738,7 +3977,7 @@ exports.getSegmentDataForTSE = async (req, res) => {
 };
 
 
-// For dealer 
+// Segment wise APIs for dealer 
 exports.getSegmentDataForDealer = async (req, res) => {
   try {
     let { start_date, end_date, data_format, dealer_code } = req.query;
@@ -4148,7 +4387,8 @@ exports.getSalesDashboardDataForDealer = async (req, res) => {
   }
 };
 
-// Segment data optimized api 
+
+// Segment wise APIs for all  
 exports.getSegmentDataForAllPositions = async (req, res) => {
   try {
     let { start_date, end_date, data_format, position, name } = req.query;

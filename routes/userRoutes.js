@@ -10,6 +10,7 @@ const {
   register,
   editProfile,
   getUserForUser,
+  autoUpdateEmployeeCodes,
 } = require("../controllers/userController");
 const { userAuth, adminAuth } = require("../middlewares/authMiddlewares");
 const router = express.Router();
@@ -25,5 +26,7 @@ router.get("/userForUser", userAuth, getUserForUser);
 
 router.put("/user", userAuth, editProfile);
 router.post("/login", login);
+
+router.put("/user/auto-update-employee-codes", autoUpdateEmployeeCodes)
 
 module.exports = router;
