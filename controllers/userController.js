@@ -611,6 +611,39 @@ exports.getUserForUser = async (req, res) => {
   }
 };
 
+// exports.autoUpdateEmployeeCodes = async (req, res) => {
+//   try {
+//     // Step 1: Get all users from the database
+//     const users = await User.find();
+
+//     // Step 2: Loop through each user to check and update the 'code' field
+//     for (let user of users) {
+//       // If the user already has a 'code', skip to the next user
+//       if (user.code) continue;
+
+//       // Convert user's name to lowercase for case-insensitive matching
+//       const userNameLowerCase = user.name.toLowerCase();
+
+//       // Step 3: Find the matching employee code by name
+//       const employee = await EmployeeCode.findOne({ Name: { $regex: new RegExp(`^${userNameLowerCase}$`, "i") } });
+
+//       // If an employee with the matching name is found, update the user's 'code' field
+//       if (employee) {
+//         user.code = employee.Code;
+
+//         // Save the updated user
+//         await user.save();
+//       }
+//     }
+
+//     // Step 4: Return a success response
+//     return res.status(200).json({ message: "Employee codes updated successfully." });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
 exports.autoUpdateEmployeeCodes = async (req, res) => {
   try {
     // Step 1: Get all users from the database
@@ -621,18 +654,25 @@ exports.autoUpdateEmployeeCodes = async (req, res) => {
       // If the user already has a 'code', skip to the next user
       if (user.code) continue;
 
-      // Convert user's name to lowercase for case-insensitive matching
-      const userNameLowerCase = user.name.toLowerCase();
+      // Check if user's name exists before converting to lowercase
+      if (user.name) {
+        // Convert user's name to lowercase for case-insensitive matching
+        const userNameLowerCase = user.name.toLowerCase();
 
-      // Step 3: Find the matching employee code by name
-      const employee = await EmployeeCode.findOne({ Name: { $regex: new RegExp(`^${userNameLowerCase}$`, "i") } });
+        // Step 3: Find the matching employee code by name
+        const employee = await EmployeeCode.findOne({
+          Name: { $regex: new RegExp(`^${userNameLowerCase}$`, "i") }
+        });
 
-      // If an employee with the matching name is found, update the user's 'code' field
-      if (employee) {
-        user.code = employee.Code;
+        // If an employee with the matching name is found, update the user's 'code' field
+        if (employee) {
+          user.code = employee.Code;
 
-        // Save the updated user
-        await user.save();
+          // Save the updated user
+          await user.save();
+        }
+      } else {
+        console.warn(`User with ID ${user._id} does not have a name defined.`);
       }
     }
 
