@@ -5019,12 +5019,218 @@ exports.getSegmentDataForTSE = async (req, res) => {
 // Segment wise APIs for dealer 
 
 
+// exports.getSegmentDataForDealer = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, dealer_code } = req.query;
+//     console.log("Start date, End date, data_format, dealer_code: ", start_date, end_date, data_format, dealer_code);
+
+//     if (!dealer_code) return res.status(400).send({ error: "Dealer parameter is required" });
+
+//     if (!data_format) data_format = "value";
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const currentMonth = endDate.getMonth() + 1;
+//     const currentYear = endDate.getFullYear();
+//     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//     const daysPassed = endDate.getDate();
+
+//     // Use the helper function to fetch target values and volumes
+//     const { targetValues, targetVolumes } = await fetchTargetValuesAndVolumes(endDate, dealer_code, "BUYER CODE");
+
+//     // Fetch sales data
+//     const salesData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "BUYER CODE": dealer_code,
+//           parsedDate: { $gte: startDate, $lte: endDate }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "MTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           },
+//           "LMTD SELL OUT": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$LMTD VALUE" : "$LMTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Find FTD data separately 
+//     const ftdData = await SalesData.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "BUYER CODE": dealer_code,
+//           parsedDate: endDate
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",
+//           "FTD": {
+//             $sum: {
+//               $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME"
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Manually assign static IDs and calculate additional fields
+//     const resultData = staticSegments.map(id => {
+//       const segmentData = salesData.find(segment => segment._id === id) || {};
+//       const ftdSegmentData = ftdData.find(segment => segment._id === id) || {};
+//       const targetValue = targetValues[id] || 0;
+//       const targetVolume = targetVolumes[id] || 0;
+//       const mtdSellOut = segmentData["MTD SELL OUT"] || 0;
+//       const lmtSellOut = segmentData["LMTD SELL OUT"] || 0;
+//       const ftdSellOut = ftdSegmentData["FTD"] || 0;
+
+//       if (data_format === "value") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VALUE": targetValue,
+//           "FTD": ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetValue - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VAL PENDING": targetValue - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       } else if (data_format === "volume") {
+//         return {
+//           _id: id,
+//           "MTD SELL OUT": mtdSellOut,
+//           "LMTD SELL OUT": lmtSellOut,
+//           "TARGET VOLUME": targetVolume,
+//           "FTD": ftdSellOut,
+//           "AVERAGE DAY SALE": mtdSellOut / Math.max(daysPassed - 1, 1),
+//           "DAILY REQUIRED AVERAGE": (targetVolume - mtdSellOut) / Math.max(daysInMonth - daysPassed, 1),
+//           "VOL PENDING": targetVolume - mtdSellOut,
+//           "CONTRIBUTION %": ((mtdSellOut / (salesData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0))) * 100).toFixed(2),
+//           "% GWTH": lmtSellOut ? (((mtdSellOut - lmtSellOut) / lmtSellOut) * 100).toFixed(2) : "N/A"
+//         };
+//       }
+//     });
+
+//     // Calculate the grand total row based on the data format
+//     let grandTotal;
+//     if (data_format === "value") {
+//       grandTotal = resultData.reduce((totals, segment) => {
+//         totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+//         totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+//         totals["FTD"] += segment["FTD"] || 0;
+//         totals["TARGET VALUE"] += segment["TARGET VALUE"] || 0;
+//         totals["VAL PENDING"] += segment["VAL PENDING"] || 0;
+//         return totals;
+//       }, {
+//         "_id": "Grand Total",
+//         "MTD SELL OUT": 0,
+//         "LMTD SELL OUT": 0,
+//         "FTD": 0,
+//         "TARGET VALUE": 0,
+//         "AVERAGE DAY SALE": 0,
+//         "DAILY REQUIRED AVERAGE": 0,
+//         "VAL PENDING": 0,
+//         "CONTRIBUTION %": 0,
+//         "% GWTH": 0
+//       });
+
+//       // Calculate derived fields for "value"
+//       grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+//       grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VALUE"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+//       grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+//       grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+//     } else if (data_format === "volume") {
+//       grandTotal = resultData.reduce((totals, segment) => {
+//         totals["MTD SELL OUT"] += segment["MTD SELL OUT"] || 0;
+//         totals["LMTD SELL OUT"] += segment["LMTD SELL OUT"] || 0;
+//         totals["FTD"] += segment["FTD"] || 0;
+//         totals["TARGET VOLUME"] += segment["TARGET VOLUME"] || 0;
+//         totals["VOL PENDING"] += segment["VOL PENDING"] || 0;
+//         return totals;
+//       }, {
+//         "_id": "Grand Total",
+//         "MTD SELL OUT": 0,
+//         "LMTD SELL OUT": 0,
+//         "FTD": 0,
+//         "TARGET VOLUME": 0,
+//         "AVERAGE DAY SALE": 0,
+//         "DAILY REQUIRED AVERAGE": 0,
+//         "VOL PENDING": 0,
+//         "CONTRIBUTION %": 0,
+//         "% GWTH": 0
+//       });
+
+//       // Calculate derived fields for "volume"
+//       grandTotal["AVERAGE DAY SALE"] = grandTotal["MTD SELL OUT"] / Math.max(daysPassed - 1, 1);
+//       grandTotal["DAILY REQUIRED AVERAGE"] = (grandTotal["TARGET VOLUME"] - grandTotal["MTD SELL OUT"]) / Math.max(daysInMonth - daysPassed, 1);
+//       grandTotal["CONTRIBUTION %"] = ((grandTotal["MTD SELL OUT"] / resultData.reduce((acc, seg) => acc + (seg["MTD SELL OUT"] || 0), 0)) * 100).toFixed(2);
+//       grandTotal["% GWTH"] = (grandTotal["LMTD SELL OUT"] ? (((grandTotal["MTD SELL OUT"] - grandTotal["LMTD SELL OUT"]) / grandTotal["LMTD SELL OUT"]) * 100).toFixed(2) : "N/A");
+//     }
+
+//     // Add the grand total as the first row in resultData
+//     resultData.unshift(grandTotal);
+
+//     res.status(200).json(resultData);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
+
 exports.getSegmentDataForDealer = async (req, res) => {
   try {
     let { start_date, end_date, data_format, dealer_code } = req.query;
     console.log("Start date, End date, data_format, dealer_code: ", start_date, end_date, data_format, dealer_code);
 
     if (!dealer_code) return res.status(400).send({ error: "Dealer parameter is required" });
+
+    // Convert dealer_code to uppercase
+    dealer_code = dealer_code.toUpperCase();
 
     if (!data_format) data_format = "value";
 
@@ -5221,6 +5427,9 @@ exports.getSegmentDataForDealer = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+
 
 exports.getSalesDashboardDataForDealer = async (req, res) => {
   try {
