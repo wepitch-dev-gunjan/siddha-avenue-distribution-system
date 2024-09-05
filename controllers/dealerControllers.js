@@ -380,3 +380,41 @@ exports.editDealer = async (req, res) => {
   }
 };
 
+exports.verifyAllDealers = async (req, res) => {
+  try {
+    // Fetch all dealers
+    const dealers = await Dealer.find();
+
+    // Check if dealers exist
+    if (!dealers || dealers.length === 0) {
+      return res.status(404).json({ error: 'No dealers found.' });
+    }
+
+    // Initialize a counter to track the number of newly verified dealers
+    let newlyVerifiedCount = 0;
+
+    // Iterate over each dealer to check their verification status
+    for (let dealer of dealers) {
+      if (dealer.verified === undefined) {
+        // If the verified field does not exist, add it and set to verified
+        dealer.verified = true;
+        await dealer.save();  // Save the changes to the dealer
+        newlyVerifiedCount++;
+      } else if (!dealer.verified) {
+        // If not verified, set to verified
+        dealer.verified = true;
+        await dealer.save();  // Save the changes to the dealer
+        newlyVerifiedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      message: 'All unverified dealers have been verified successfully.',
+      totalVerified: newlyVerifiedCount,
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
