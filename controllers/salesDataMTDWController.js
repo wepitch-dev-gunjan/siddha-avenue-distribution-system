@@ -301,7 +301,7 @@ exports.getSalesDataChannelWiseForEmployeeMDTW = async (req, res) => {
 
     // Fetch employee details based on the code
     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
-    
+
     if (!employee) {
       return res.status(404).send({ error: "Employee not found with the given code" });
     }
@@ -535,6 +535,31 @@ exports.getSalesDataChannelWiseForEmployeeMDTW = async (req, res) => {
 
     report.unshift(grandTotal); // Insert the grand total as the first row
 
+
+        // Add dynamic column names as the first entry in the response
+        const columnNames = {
+          "Category Wise": "Category Wise",
+          "Target Vol": "Target Vol",
+          "Mtd Vol": "Mtd Vol",
+          "Lmtd Vol": "Lmtd Vol",
+          "Pending Vol": "Pending Vol",
+          "ADS": "ADS",
+          "Req. ADS": "Req. ADS",
+          "% Gwth Vol": "% Gwth Vol",
+          "Target SO": "Target SO",
+          "Activation MTD": "Activation MTD",
+          "Activation LMTD": "Activation LMTD",
+          "Pending Act": "Pending Act",
+          "ADS Activation": "ADS Activation",
+          "Req. ADS Activation": "Req. ADS Activation",
+          "% Gwth Val": "% Gwth Val",
+          "FTD": "FTD",
+          "Contribution %": "Contribution %"
+        };
+    
+        // Add the column names at the start of the report
+        report.unshift(columnNames);
+        
     res.status(200).send(report);
   } catch (error) {
     console.error(error);
