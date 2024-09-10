@@ -75,11 +75,23 @@ exports.uploadSalesDataMDTW = async (req, res) => {
 
 exports.getSalesDashboardDataMDTW = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format, position, name } = req.query;
+    let { td_format, start_date, end_date, data_format, code } = req.query;
 
-    if (!position || !name) {
-      return res.status(400).send({ error: "Position and name are required." });
+    // Validate that employee code is provided
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required." });
     }
+
+    // Convert employee code to uppercase
+    const employeeCodeUpper = code.toUpperCase();
+
+    // Fetch employee details based on the code
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+    if (!employee) {
+      return res.status(404).send({ error: "Employee not found with the given code." });
+    }
+
+    const { Name: name, Position: position } = employee;
 
     if (!td_format) td_format = 'MTD';
     if (!data_format) data_format = "value";
@@ -559,13 +571,15 @@ exports.getSalesDataChannelWiseForEmployeeMDTW = async (req, res) => {
     
         // Add the column names at the start of the report
         report.unshift(columnNames);
-        
+
     res.status(200).send(report);
   } catch (error) {
     console.error(error);
     return res.status(500).send("Internal Server Error");
   }
 };
+
+
 
 
 
