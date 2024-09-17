@@ -304,7 +304,8 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
 
 exports.getSalesDataChannelWiseForEmployeeMTDW = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format, code } = req.query;
+    let { code } = req;
+    let { td_format, start_date, end_date, data_format } = req.query;
 
     if (!code) {
       return res.status(400).send({ error: "Employee code is required" });
@@ -1132,6 +1133,7 @@ exports.getSalesDashboardDataForDealerMTDW = async (req, res) => {
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
+
 
 
 

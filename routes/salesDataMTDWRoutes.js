@@ -14,7 +14,7 @@ router.post("/sales-data-mtdw", upload.single("file"), uploadSalesDataMTDW);
 
 // EMPLOYEE ROUTES 
 router.get("/sales-data-mtdw/dashboard/employee", userAuth,  getSalesDashboardDataForEmployeeMTDW);
-router.get("/sales-data-mtdw/channel-wise/employee", getSalesDataChannelWiseForEmployeeMTDW);
+router.get("/sales-data-mtdw/channel-wise/employee", userAuth, getSalesDataChannelWiseForEmployeeMTDW);
 router.get("/sales-data-mtdw/segment-wise/employee", getSalesDataSegmentWiseForEmployeeMTDW);
 
 // DEALER ROUTES 

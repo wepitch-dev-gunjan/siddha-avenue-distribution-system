@@ -15,7 +15,7 @@ exports.userAuth = async (req, res, next) => {
         .json({ error: "No token found, authorization denied" });
     }
     // remove later
-    console.log("Employee token: ", token)
+    // console.log("Employee token: ", token)
 
     // Verify the token using your secret key
     const decoded = jwt.verify(token, JWT_SECRET);

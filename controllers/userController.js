@@ -324,6 +324,7 @@ exports.login = async (req, res) => {
         phone_number: user.phone_number,
         position: user.position,
         role: "employee", // Include role in the token payload
+        code: user.code,
       };
     } else if (role === "dealer") {
       // Find the dealer by dealerCode for dealer
