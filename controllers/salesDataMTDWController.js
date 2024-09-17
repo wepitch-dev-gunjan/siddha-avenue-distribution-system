@@ -900,14 +900,18 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
 // DEALER APIs 
 exports.getSalesDashboardDataForDealerMTDW = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format, dealer_code } = req.query;
+    let { dealerCode } = req;
+    let { td_format, start_date, end_date, data_format } = req.query;
 
-    if (!dealer_code) {
+    if (!dealerCode) {
       return res.status(400).send({ error: "Dealer Code is required." });
     }
+    // console.log("Buyer code:", dealerCode)
 
     if (!td_format) td_format = 'MTD';
     if (!data_format) data_format = "value";
+
+    // console.log("Start date, End date, td_format, data_format: ", start_date, end_date, td_format, data_format);
 
     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     let endDate = end_date ? new Date(end_date) : new Date();
@@ -926,7 +930,7 @@ exports.getSalesDashboardDataForDealerMTDW = async (req, res) => {
         $gte: startDate,
         $lte: endDate
       },
-      ['BUYER CODE']: dealer_code
+      ['BUYER CODE']: dealerCode
     };
 
     const lytdStartDate = new Date(`${endYear - 1}-01-01`);
