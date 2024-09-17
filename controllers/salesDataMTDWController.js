@@ -76,7 +76,8 @@ exports.uploadSalesDataMTDW = async (req, res) => {
 // EMPLOYEE APIs 
 exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format, code } = req.query;
+    let { code } = req;
+    let { td_format, start_date, end_date, data_format } = req.query;
 
     // Validate that employee code is provided
     if (!code) {
