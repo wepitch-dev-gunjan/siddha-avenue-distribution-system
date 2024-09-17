@@ -226,6 +226,7 @@ exports.register = async (req, res) => {
         phone_number: user.phone_number,
         position: user.position,
         role: "employee", // Include role in the token payload
+        code: user.code
       },
       JWT_SECRET,
       { expiresIn: "7d" }
