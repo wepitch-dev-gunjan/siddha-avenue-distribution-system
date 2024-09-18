@@ -5,6 +5,7 @@ const crypto = require("crypto");
 require("dotenv").config();
 const { JWT_SECRET } = process.env;
 const { token } = require("../middlewares/authMiddlewares");
+const SalesDataMTDW = require('../models/SalesDataMTDW');
 require("dotenv").config();
 
 // exports.addDealer = async (req, res) => {
@@ -418,3 +419,116 @@ exports.verifyAllDealers = async (req, res) => {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+// Auto fetch and register dealers from sales data MTDW 
+exports.registerDealersFromSalesData = async (req, res) => {
+  try {
+    // Fetch all unique BUYER CODE entries from the sales data (SalesDataMTDW)
+    const uniqueDealerCodes = await SalesDataMTDW.distinct("BUYER CODE");
+
+    // Capitalize all dealer codes
+    const capitalizedDealerCodes = uniqueDealerCodes.map(code => code.toUpperCase());
+
+    // Fetch existing dealers from the database (those that already have a dealerCode)
+    const existingDealers = await Dealer.find({ dealerCode: { $in: capitalizedDealerCodes } });
+
+    // Extract the dealer codes that already exist
+    const existingDealerCodes = existingDealers.map(dealer => dealer.dealerCode);
+
+    // Filter out the dealer codes that are not in the existing dealers list
+    const newDealerCodes = capitalizedDealerCodes.filter(code => !existingDealerCodes.includes(code));
+
+    // Register new dealers
+    let newDealers = [];
+    for (const dealerCode of newDealerCodes) {
+      // Get the sales entry to fetch shopName (BUYER field) from the sales data
+      const salesEntry = await SalesDataMTDW.findOne({ "BUYER CODE": dealerCode });
+
+      if (salesEntry) {
+        const shopName = salesEntry.BUYER || "Unknown Shop"; // Default to "Unknown Shop" if no buyer name is found
+        const shopArea = "Unknown Area"; // Default value, adjust based on data availability
+        const shopAddress = "Unknown Address"; // Default value, adjust based on data availability
+
+        // Owner details from schema
+        const owner = {
+          name: "Unknown Owner", // Default owner name, adjust if data is available
+          position: "Owner", // Default position
+          contactNumber: "Unknown Contact", // Default contact number
+          email: `${dealerCode.toLowerCase()}@gmail.com`, // Default email as [dealerCode@gmail.com]
+          homeAddress: "Unknown Home Address", // Default home address
+          birthday: new Date(1970, 0, 1), // Default birthday, adjust if necessary
+          wife: {
+            name: "", // Optional, default empty
+            birthday: null // Optional, default null
+          },
+          children: [], // Default empty children array
+          otherFamilyMembers: [] // Default empty family members array
+        };
+
+        // Business details from schema
+        const businessDetails = {
+          typeOfBusiness: "Unknown", // Default business type
+          yearsInBusiness: 0, // Default to 0, as no data available
+          preferredCommunicationMethod: "Unknown" // Default value
+        };
+
+        // Hash the default password "123456"
+        const hashedPassword = await bcrypt.hash("123456", 10);
+
+        // Create a new dealer object with all required fields
+        const newDealer = new Dealer({
+          dealerCode,
+          shopName,
+          shopArea, // Required field
+          shopAddress, // Required field
+          owner, // Owner details
+          anniversaryDate: null, // Default null for now
+          otherImportantFamilyDates: [], // Default empty array
+          businessDetails, // Business details
+          specialNotes: "", // No special notes available
+          password: hashedPassword, // Password field
+          verified: false // Set verified to false initially
+        });
+
+        // Save the new dealer in the database
+        await newDealer.save();
+
+        // Generate a token for the newly created dealer
+        const token = jwt.sign(
+          {
+            dealer_id: newDealer._id,
+            dealerCode: newDealer.dealerCode,
+            shopName: newDealer.shopName,
+            ownerName: newDealer.owner.name,
+            role: "dealer", // Include the role in the token payload
+          },
+          JWT_SECRET,
+          { expiresIn: "7d" } // Token expiry duration
+        );
+
+        // Add the new dealer to the response list
+        newDealers.push({
+          dealer: newDealer,
+          token,
+          message: "Dealer registered successfully."
+        });
+      }
+    }
+
+    if (newDealers.length > 0) {
+      // Return the newly registered dealers and their tokens
+      return res.status(200).json({
+        message: "New dealers registered successfully.",
+        newDealers
+      });
+    } else {
+      return res.status(200).json({
+        message: "No new dealers to register."
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
