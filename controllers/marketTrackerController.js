@@ -1,6 +1,7 @@
 const { Readable } = require("stream");
 const csvParser = require("csv-parser");
-const MarketTracker = require("../models/marketTracker");
+const MarketTracker = require("../models/MarketTracker");
+
 
 
 exports.uploadMarketTrackerData = async (req, res) => {
