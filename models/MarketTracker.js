@@ -7,4 +7,5 @@ const MarketTracker = new Schema(
   }
 );
 
+
 module.exports = model("MarketTracker", MarketTracker);
