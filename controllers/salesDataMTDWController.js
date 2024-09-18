@@ -584,7 +584,8 @@ exports.getSalesDataChannelWiseForEmployeeMTDW = async (req, res) => {
 
 exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
   try {
-    let { start_date, end_date, data_format, code } = req.query;
+    let { code } = req;
+    let { start_date, end_date, data_format } = req.query;
 
     if (!code) {
       return res.status(400).send({ error: "Employee code is required" });
