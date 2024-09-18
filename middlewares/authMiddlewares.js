@@ -45,7 +45,10 @@ exports.dealerAuth = async (req, res, next) => {
         .status(401)
         .json({ error: "No token found, authorization denied" });
     }
-
+    
+    // remove later
+    // console.log("Dealer Token: ", token)
+    
     // Verify the token using your secret key
     const decoded = jwt.verify(token, JWT_SECRET);
     const dealer = await Dealer.findOne({ _id: decoded.dealer_id });
