@@ -1,5 +1,5 @@
 const express = require("express");
-const { addDealer, getDealer, isDealerVerified, editDealer, verifyAllDealers, registerDealersFromSalesData, deleteDuplicateDealers } = require("../controllers/dealerControllers");
+const { addDealer, getDealer, isDealerVerified, editDealer, verifyAllDealers, registerDealersFromSalesData, deleteDuplicateDealers, capitalizeDealerCodes } = require("../controllers/dealerControllers");
 const router = express.Router();
 const { userAuth, dealerAuth } = require("../middlewares/authMiddlewares");
 
@@ -13,5 +13,8 @@ router.post("/register-dealers-from-sales-data", registerDealersFromSalesData);
 
 // delete duplicate dealers w dealer code 
 router.delete("/delete-dupe-dealers-w-dealer-code", deleteDuplicateDealers);
+
+// capitalize all dealer codes 
+router.put("/capitalize-all-dealer-codes", capitalizeDealerCodes);
 
 module.exports = router;

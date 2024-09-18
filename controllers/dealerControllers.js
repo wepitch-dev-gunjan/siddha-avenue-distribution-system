@@ -532,7 +532,6 @@ exports.registerDealersFromSalesData = async (req, res) => {
   }
 };
 
-
 exports.deleteDuplicateDealers = async (req, res) => {
   try {
     // Find all dealer codes that have more than one occurrence
@@ -583,6 +582,54 @@ exports.deleteDuplicateDealers = async (req, res) => {
     } else {
       return res.status(200).json({
         message: "No duplicate dealers found."
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.capitalizeDealerCodes = async (req, res) => {
+  try {
+    // Find all dealers where the dealerCode is not already in uppercase
+    const dealers = await Dealer.find({});
+
+    let updatedDealers = [];
+    let updatedCount = 0;
+
+    for (const dealer of dealers) {
+      const originalDealerCode = dealer.dealerCode;
+
+      // Check if dealerCode is not capitalized
+      if (originalDealerCode !== originalDealerCode.toUpperCase()) {
+        // Capitalize the dealerCode
+        dealer.dealerCode = originalDealerCode.toUpperCase();
+
+        // Save the updated dealer entry
+        await dealer.save();
+
+        updatedDealers.push({
+          _id: dealer._id,
+          oldDealerCode: originalDealerCode,
+          newDealerCode: dealer.dealerCode
+        });
+
+        // Increment count of updated dealer codes
+        updatedCount += 1;
+      }
+    }
+
+    if (updatedDealers.length > 0) {
+      return res.status(200).json({
+        message: "Dealer codes capitalized successfully.",
+        updatedCount: updatedCount, // Include the count of updated dealer codes
+        updatedDealers
+      });
+    } else {
+      return res.status(200).json({
+        message: "All dealer codes are already capitalized.",
+        updatedCount: 0
       });
     }
   } catch (error) {
