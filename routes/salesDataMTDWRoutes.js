@@ -7,7 +7,8 @@ const {
     getSalesDataChannelWiseForEmployeeMTDW, 
     getSalesDataSegmentWiseForEmployeeMTDW, 
     getSalesDashboardDataForDealerMTDW,
-    getSalesDataChannelWiseForDealerMTDW
+    getSalesDataChannelWiseForDealerMTDW,
+    getSalesDataSegmentWiseForDealerMTDW
 } = require("../controllers/salesDataMTDWController");
 const { dealerAuth, userAuth } = require("../middlewares/authMiddlewares");
 
@@ -21,6 +22,6 @@ router.get("/sales-data-mtdw/segment-wise/employee", userAuth, getSalesDataSegme
 // DEALER ROUTES 
 router.get("/sales-data-mtdw/dashboard/dealer", dealerAuth,  getSalesDashboardDataForDealerMTDW);
 router.get("/sales-data-mtdw/channel-wise/dealer", dealerAuth, getSalesDataChannelWiseForDealerMTDW);
-
+router.get("/sales-data-mtdw/segment-wise/dealer", dealerAuth, getSalesDataSegmentWiseForDealerMTDW);
 
 module.exports = router;
