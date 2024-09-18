@@ -532,3 +532,61 @@ exports.registerDealersFromSalesData = async (req, res) => {
   }
 };
 
+
+exports.deleteDuplicateDealers = async (req, res) => {
+  try {
+    // Find all dealer codes that have more than one occurrence
+    const duplicateDealers = await Dealer.aggregate([
+      {
+        $group: {
+          _id: "$dealerCode",
+          count: { $sum: 1 },
+          ids: { $push: "$_id" } // Collecting all dealer IDs with the same dealerCode
+        }
+      },
+      {
+        $match: { count: { $gt: 1 } } // Find dealerCodes that occur more than once
+      }
+    ]);
+
+    // Array to track all deleted dealers and their counts
+    let deletedDealersInfo = [];
+
+    // Loop through each duplicate dealerCode group
+    for (const dealerGroup of duplicateDealers) {
+      // Sort the dealer records by creation date and keep only the oldest one
+      const dealers = await Dealer.find({ _id: { $in: dealerGroup.ids } }).sort({ createdAt: 1 });
+
+      // Keep the first (oldest) dealer and delete the rest (most recent ones)
+      const dealersToDelete = dealers.slice(1); // Skip the first one
+      let deletedCount = 0;
+
+      // Delete the duplicate dealers
+      for (const dealer of dealersToDelete) {
+        await Dealer.findByIdAndDelete(dealer._id); // Delete each duplicate dealer
+        deletedCount += 1;
+      }
+
+      // Add the details of the deleted dealers, including the count
+      deletedDealersInfo.push({
+        dealerCode: dealerGroup._id,
+        totalDuplicates: dealerGroup.count,
+        deletedDuplicates: deletedCount
+      });
+    }
+
+    if (deletedDealersInfo.length > 0) {
+      return res.status(200).json({
+        message: "Duplicate dealers deleted successfully.",
+        deletedDealersInfo // Include the details of the deleted dealers with counts
+      });
+    } else {
+      return res.status(200).json({
+        message: "No duplicate dealers found."
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
