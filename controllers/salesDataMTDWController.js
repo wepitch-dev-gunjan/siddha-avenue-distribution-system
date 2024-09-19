@@ -1499,6 +1499,287 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
   }
 };
 
+
+exports.getSalesDataSegmentWiseForPositionCategoryOverviewMTDW = async (req, res) => {
+  try {
+    let { code } = req;
+    let { td_format, start_date, end_date, data_format } = req.query;
+
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required" });
+    }
+
+    // Convert employee code to uppercase
+    const employeeCodeUpper = code.toUpperCase();
+
+    // Fetch employee details based on the code
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+    if (!employee) {
+      return res.status(404).send({ error: "Employee not found with the given code" });
+    }
+
+    const { Name: name, Position: position } = employee;
+
+    // Default channels and columns
+    const channels = [
+      "DCM", "PC", "SCP", "SIS Plus", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+    ];
+
+    const defaultRow = {
+      "Category Wise": "",
+      "Target Vol": 0,
+      "Mtd Vol": 0,
+      "Lmtd Vol": 0,
+      "Pending Vol": 0,
+      "ADS": 0,
+      "Req. ADS": 0,
+      "% Gwth Vol": 0,
+      "Target SO": 0,
+      "Activation MTD": 0,
+      "Activation LMTD": 0,
+      "Pending Act": 0,
+      "ADS Activation": 0,
+      "Req. ADS Activation": 0,
+      "% Gwth Val": 0,
+      "FTD": 0,
+      "Contribution %": 0
+    };
+
+    if (!name || !position) {
+      return res.status(400).send({ error: "Name and position parameters are required" });
+    }
+
+    if (!td_format) td_format = 'MTD';
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+
+    const parsedDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    const presentDayOfMonth = new Date().getDate();
+
+    // Fetch target values and volumes by channel
+    const { targetValuesByChannel, targetVolumesByChannel } = await fetchTargetValuesAndVolumesByChannel(endDate, name, position);
+
+    // Query for MTD data
+    let salesStatsQuery = [
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: { $gte: startDate, $lte: endDate },
+          "SALES TYPE": "Sell Out",
+          [position]: name
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
+          "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
+        }
+      }
+    ];
+
+    const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
+
+    // Query for LMTD data
+    let previousMonthStartDate = new Date(startDate);
+    previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+    let previousMonthEndDate = new Date(endDate);
+    previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+
+    const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+          "SALES TYPE": "Sell Out",
+          [position]: name
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "LMTD VALUE": {
+            $sum: {
+              $convert: {
+                input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
+
+    // Query for FTD data
+    const ftdData = await SalesDataMTDW.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: endDate,
+          "SALES TYPE": "Sell Out",
+          [position]: name
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "FTD": {
+            $sum: {
+              $convert: {
+                input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
+
+    // Build the report logic with all channels and include LMTD and FTD
+    let lmtDataMap = {};
+    let ftdDataMap = {};
+    lastMonthSalesStats.forEach(item => {
+      lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
+    });
+    ftdData.forEach(item => {
+      ftdDataMap[item._id] = item['FTD'] || 0;
+    });
+
+    let totalMTDSales = 0;
+    let report = channels.map(channel => {
+      let channelData = salesStats.find(item => item._id === channel) || {};
+      let lmtValue = lmtDataMap[channel] || 0;
+      let ftdValue = ftdDataMap[channel] || 0;
+
+      let targetVol = targetVolumesByChannel[channel] || 0;
+      let mtdVol = channelData['MTD VALUE'] || 0;
+      let lmtdVol = lmtValue;
+
+      totalMTDSales += mtdVol;
+
+      let pendingVol = targetVol - mtdVol;
+      let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+      let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
+
+      return {
+        "Category Wise": channel,
+        "Target Vol": targetVol,
+        "Mtd Vol": mtdVol,
+        "Lmtd Vol": lmtdVol,
+        "Pending Vol": pendingVol,
+        "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+        "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+        "% Gwth Vol": growthVol.toFixed(2),
+        "Target SO": targetValuesByChannel[channel] || 0,
+        "Activation MTD": mtdVol,
+        "Activation LMTD": lmtdVol,
+        "Pending Act": pendingVol,
+        "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+        "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+        "% Gwth Val": growthVol.toFixed(2),
+        "FTD": ftdValue,
+        "Contribution %": contribution
+      };
+    });
+
+    // Grand total logic
+    let grandTotal = report.reduce(
+      (total, row) => {
+        Object.keys(row).forEach(key => {
+          if (key !== "Category Wise") total[key] += parseFloat(row[key]) || 0;
+        });
+        return total;
+      },
+      { ...defaultRow, "Category Wise": "Grand Total" }
+    );
+
+    grandTotal = {
+      ...grandTotal,
+      "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+      "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
+      "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+      "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
+      "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+    };
+
+    report.unshift(grandTotal); // Insert the grand total as the first row
+
+
+        // Add dynamic column names as the first entry in the response
+        const columnNames = {
+          "Category Wise": "Category Wise",
+          "Target Vol": "Target Vol",
+          "Mtd Vol": "Mtd Vol",
+          "Lmtd Vol": "Lmtd Vol",
+          "Pending Vol": "Pending Vol",
+          "ADS": "ADS",
+          "Req. ADS": "Req. ADS",
+          "% Gwth Vol": "% Gwth Vol",
+          "Target SO": "Target SO",
+          "Activation MTD": "Activation MTD",
+          "Activation LMTD": "Activation LMTD",
+          "Pending Act": "Pending Act",
+          "ADS Activation": "ADS Activation",
+          "Req. ADS Activation": "Req. ADS Activation",
+          "% Gwth Val": "% Gwth Val",
+          "FTD": "FTD",
+          "Contribution %": "Contribution %"
+        };
+    
+        // Add the column names at the start of the report
+        report.unshift(columnNames);
+
+    res.status(200).send(report);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
 // DEALER APIs 
 exports.getSalesDashboardDataForDealerMTDW = async (req, res) => {
   try {
@@ -2291,6 +2572,140 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
 exports.getAllSubordinatesMTDW = async (req, res) => {
   try {
     let { code } = req;
+
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required!" });
+    }
+
+    const employeeCodeUpper = code.toUpperCase();
+
+    // Fetching employee details based on the code
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+    if (!employee) {
+      return res.status(404).send({ error: "Employee not found with the given code" });
+    }
+
+    const { Name: name, Position: position } = employee;
+
+    // console.log("Name & Position: ", name, position);
+
+    const positionsHierarchy = {
+      ZSM: ["ABM", "RSO", "ASE", "ASM", "TSE"],
+      ABM: ["RSO", "ASE", "ASM", "TSE"],
+      RSO: ["ASE", "ASM", "TSE"],
+      ASE: ["ASM", "TSE"],
+      ASM: ["TSE"],
+    };
+
+    if (!positionsHierarchy[position]) {
+      return res.status(400).json({ error: "Invalid position." });
+    }
+
+    const subordinatesPipeline = [
+      {
+        $match: {
+          [position]: name,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          ABM: {
+            $addToSet: {
+              $cond: [
+                { $or: [{ $eq: ["$ABM", ""] }, { $eq: ["$ABM", "0"] }] },
+                null,
+                "$ABM",
+              ],
+            },
+          },
+          RSO: {
+            $addToSet: {
+              $cond: [
+                { $or: [{ $eq: ["$RSO", ""] }, { $eq: ["$RSO", "0"] }] },
+                null,
+                "$RSO",
+              ],
+            },
+          },
+          ASE: {
+            $addToSet: {
+              $cond: [
+                { $or: [{ $eq: ["$ASE", ""] }, { $eq: ["$ASE", "0"] }] },
+                null,
+                "$ASE",
+              ],
+            },
+          },
+          ASM: {
+            $addToSet: {
+              $cond: [
+                { $or: [{ $eq: ["$ASM", ""] }, { $eq: ["$ASM", "0"] }] },
+                null,
+                "$ASM",
+              ],
+            },
+          },
+          TSE: {
+            $addToSet: {
+              $cond: [
+                { $or: [{ $eq: ["$TSE", ""] }, { $eq: ["$TSE", "0"] }] },
+                null,
+                "$TSE",
+              ],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          subordinates: positionsHierarchy[position].reduce((acc, pos) => {
+            acc[pos] = {
+              $concatArrays: [
+                [{ $literal: "All" }], // Add "All" element at the start of the array
+                {
+                  $filter: {
+                    input: `$${pos}`,
+                    as: "name",
+                    cond: {
+                      $and: [
+                        { $ne: ["$$name", null] },
+                        { $ne: ["$$name", ""] },
+                        { $ne: ["$$name", "0"] },
+                      ],
+                    },
+                  },
+                },
+              ],
+            };
+            return acc;
+          }, {}),
+        },
+      },
+    ];
+
+    const subordinates = await SalesDataMTDW.aggregate(subordinatesPipeline);
+
+    if (!subordinates.length) {
+      return res.status(404).json({ error: "No subordinates found." });
+    }
+
+    const result = {
+      positions: positionsHierarchy[position],
+      ...subordinates[0].subordinates,
+    };
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
+  try {
+    let { code } = req.params;
 
     if (!code) {
       return res.status(400).send({ error: "Employee code is required!" });
