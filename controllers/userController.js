@@ -605,6 +605,7 @@ exports.getUserForUser = async (req, res) => {
       role: user.position,
       email: user.email,
       verified: user.verified,
+      code: user.code
     };
     res.status(200).json(response);
   } catch (error) {
