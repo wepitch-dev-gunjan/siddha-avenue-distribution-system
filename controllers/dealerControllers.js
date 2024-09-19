@@ -337,9 +337,10 @@ exports.editDealer = async (req, res) => {
       if (owner.name) dealer.owner.name = owner.name;
       if (owner.position) dealer.owner.position = owner.position;
       if (owner.contactNumber) dealer.owner.contactNumber = owner.contactNumber;
-      if (owner.email) {
-        return res.status(400).json({ error: 'Email cannot be edited.' });
-      }
+      if (owner.email) dealer.owner.email = owner.email;
+      // if (owner.email) {
+      //   return res.status(400).json({ error: 'Email cannot be edited.' });
+      // }
       if (owner.homeAddress) dealer.owner.homeAddress = owner.homeAddress;
       if (owner.birthday) dealer.owner.birthday = owner.birthday;
       if (owner.wife) {
