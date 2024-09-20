@@ -1,6 +1,6 @@
 const express = require("express");
 const { upload } = require("../services/fileUpload");
-const { uploadModelData, getSalesDataModelWise, getSalesDataModelWiseForEmployeeMTDW, getSalesDataModelWiseBySubordinateCodeMTDW, getSalesDataModelWiseByPositionCategoryMTDW } = require("../controllers/modelDataController");
+const { uploadModelData, getSalesDataModelWise, getSalesDataModelWiseForEmployeeMTDW, getSalesDataModelWiseBySubordinateCodeMTDW, getSalesDataModelWiseByPositionCategoryMTDW, getSalesDataModelWiseBySubordinateNameMTDW } = require("../controllers/modelDataController");
 const { userAuth, dealerAuth } = require("../middlewares/authMiddlewares");
 const { getSalesDataSegmentWiseForDealerMTDW } = require("../controllers/salesDataMTDWController");
 const router = express.Router();
@@ -13,5 +13,6 @@ router.get("/model-data/mtdw/employee", userAuth, getSalesDataModelWiseForEmploy
 router.get("/model-data/mtdw/dealer", dealerAuth, getSalesDataSegmentWiseForDealerMTDW);
 router.get("/model-data-mtdw/by-subordinate-code/:subordinate_code", getSalesDataModelWiseBySubordinateCodeMTDW);
 router.get("/model-data-mtdw/by-position-category", userAuth, getSalesDataModelWiseByPositionCategoryMTDW);
+router.get("/model-data-mtdw/by-subordinate-name/:subordinate_name", getSalesDataModelWiseBySubordinateNameMTDW);
 
 module.exports = router;
