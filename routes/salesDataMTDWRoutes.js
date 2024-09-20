@@ -14,7 +14,9 @@ const {
     getSalesDataSegmentWiseBySubordinateCodeMTDW,
     getAllSubordinatesByCodeMTDW,
     getSalesDataChannelWiseByPositionCategoryMTDW,
-    getSalesDataSegmentWiseByPositionCategoryMTDW
+    getSalesDataSegmentWiseByPositionCategoryMTDW,
+    getSalesDataSegmentWiseBySubordinateNameMTDW,
+    getSalesDataChannelWiseBySubordinateNameMTDW
 } = require("../controllers/salesDataMTDWController");
 const { dealerAuth, userAuth } = require("../middlewares/authMiddlewares");
 
@@ -28,6 +30,8 @@ router.get("/sales-data-mtdw/channel-wise/by-subordinate-code/:subordinate_code"
 router.get("/sales-data-mtdw/segment-wise/by-subordinate-code/:subordinate_code", getSalesDataSegmentWiseBySubordinateCodeMTDW);
 router.get("/sales-data-mtdw/channel-wise/by-position-category", userAuth, getSalesDataChannelWiseByPositionCategoryMTDW);
 router.get("/sales-data-mtdw/segment-wise/by-position-category", userAuth, getSalesDataSegmentWiseByPositionCategoryMTDW);
+router.get("/sales-data-mtdw/channel-wise/by-subordinate-name/:subordinate_name", getSalesDataChannelWiseBySubordinateNameMTDW);
+router.get("/sales-data-mtdw/segment-wise/by-subordinate-name/:subordinate_name", getSalesDataSegmentWiseBySubordinateNameMTDW)
 
 // DEALER ROUTES 
 router.get("/sales-data-mtdw/dashboard/dealer", dealerAuth,  getSalesDashboardDataForDealerMTDW);
