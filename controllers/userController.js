@@ -360,7 +360,7 @@ exports.login = async (req, res) => {
       message: "User logged in successfully",
       token,
       role, // Include the role in the response to differentiate dashboards
-      verified: user.verified || true, // Default to true if not present in dealer
+      verified: user.verified || false, // Default to true if not present in dealer
       position: user.position || "Dealer", // Default to 'Dealer' for dealers
     });
   } catch (error) {
