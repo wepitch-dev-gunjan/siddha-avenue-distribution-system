@@ -2046,7 +2046,6 @@ exports.getSalesDataSegmentWiseByPositionCategoryMTDW = async (req, res) => {
   }
 };
 
-
 exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
   try {
     let { subordinate_name } = req.params;
