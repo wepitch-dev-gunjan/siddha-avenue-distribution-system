@@ -614,39 +614,7 @@ exports.getUserForUser = async (req, res) => {
   }
 };
 
-// exports.autoUpdateEmployeeCodes = async (req, res) => {
-//   try {
-//     // Step 1: Get all users from the database
-//     const users = await User.find();
-
-//     // Step 2: Loop through each user to check and update the 'code' field
-//     for (let user of users) {
-//       // If the user already has a 'code', skip to the next user
-//       if (user.code) continue;
-
-//       // Convert user's name to lowercase for case-insensitive matching
-//       const userNameLowerCase = user.name.toLowerCase();
-
-//       // Step 3: Find the matching employee code by name
-//       const employee = await EmployeeCode.findOne({ Name: { $regex: new RegExp(`^${userNameLowerCase}$`, "i") } });
-
-//       // If an employee with the matching name is found, update the user's 'code' field
-//       if (employee) {
-//         user.code = employee.Code;
-
-//         // Save the updated user
-//         await user.save();
-//       }
-//     }
-
-//     // Step 4: Return a success response
-//     return res.status(200).json({ message: "Employee codes updated successfully." });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ message: "Internal Server Error" });
-//   }
-// };
-
+// Utilities
 exports.autoUpdateEmployeeCodes = async (req, res) => {
   try {
     // Step 1: Get all users from the database
@@ -684,5 +652,56 @@ exports.autoUpdateEmployeeCodes = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+exports.registerAllUsersFromEmployeeCodeDB = async (req, res) => {
+  try {
+      // Fetch all EmployeeCodes
+      const employeeCodes = await EmployeeCode.find({});
+
+      // Counter to track the number of users registered
+      let registeredCount = 0;
+
+      // Loop through each EmployeeCode entry
+      for (const employee of employeeCodes) {
+          const { Name, Position, Code } = employee;
+
+          // Check if the user is already registered by their employee code
+          const existingUser = await User.findOne({ code: Code });
+
+          if (!existingUser) {
+              // Create a dummy email using the employee code
+              const email = `${Code.toLowerCase()}@gmail.com`;
+
+              // Hash the default password '123456'
+              const hashedPassword = await bcrypt.hash('123456', 10);
+
+              // Create new user object
+              const newUser = new User({
+                  name: Name,
+                  email: email,
+                  password: hashedPassword,
+                  code: Code,
+                  verified: true,
+                  position: Position,
+              });
+
+              // Save the new user to the database
+              await newUser.save();
+
+              // Increment the counter for registered users
+              registeredCount++;
+          }
+      }
+
+      // Return the response with the count of registered users
+      res.status(200).json({ 
+          message: 'Users registered successfully from EmployeeCode!',
+          registeredCount: registeredCount 
+      });
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'An error occurred during registration', error });
   }
 };

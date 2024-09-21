@@ -3400,6 +3400,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
   }
 };
 
+// Utilities 
 exports.getAllSubordinatesMTDW = async (req, res) => {
   try {
     let { code } = req;
@@ -3667,6 +3668,11 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
+
+
+
+
+
 
 // exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
 //   try {
