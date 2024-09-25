@@ -3479,7 +3479,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
   }
 };
 
-exports.getSalesDataChannelWiseForDealerByDealerCodeMTDW = async (req, res) => {
+exports.getSalesDataChannelWiseForEmployeeByDealerCodeMTDW = async (req, res) => {
   try {
     let { td_format, start_date, end_date, data_format, dealerCode } = req.query;
 
@@ -3742,7 +3742,7 @@ exports.getSalesDataChannelWiseForDealerByDealerCodeMTDW = async (req, res) => {
   }
 };
 
-exports.getSalesDataSegmentWiseForDealerByDealerCodeMTDW = async (req, res) => {
+exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) => {
   try {
     let { start_date, end_date, data_format, dealerCode } = req.query;
 

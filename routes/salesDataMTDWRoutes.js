@@ -18,8 +18,8 @@ const {
     getSalesDataSegmentWiseBySubordinateNameMTDW,
     getSalesDataChannelWiseBySubordinateNameMTDW,
     getDealerListForEmployee,
-    getSalesDataChannelWiseForDealerByDealerCodeMTDW,
-    getSalesDataSegmentWiseForDealerByDealerCodeMTDW
+    getSalesDataChannelWiseForEmployeeByDealerCodeMTDW,
+    getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW
 } = require("../controllers/salesDataMTDWController");
 const { dealerAuth, userAuth } = require("../middlewares/authMiddlewares");
 
@@ -36,13 +36,13 @@ router.get("/sales-data-mtdw/segment-wise/by-position-category", userAuth, getSa
 router.get("/sales-data-mtdw/channel-wise/by-subordinate-name/:subordinate_name", getSalesDataChannelWiseBySubordinateNameMTDW);
 router.get("/sales-data-mtdw/segment-wise/by-subordinate-name/:subordinate_name", getSalesDataSegmentWiseBySubordinateNameMTDW)
 router.get("/sales-data-mtdw/get-dealer-list-for-employees", userAuth, getDealerListForEmployee);
+router.get("/sales-data-mtdw/channel-wise/employee/by-dealer-code", getSalesDataChannelWiseForEmployeeByDealerCodeMTDW);
+router.get("/sales-data-mtdw/segment-wise/employee/by-dealer-code", getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW);
 
 // DEALER ROUTES 
 router.get("/sales-data-mtdw/dashboard/dealer", dealerAuth,  getSalesDashboardDataForDealerMTDW);
 router.get("/sales-data-mtdw/channel-wise/dealer", dealerAuth, getSalesDataChannelWiseForDealerMTDW);
 router.get("/sales-data-mtdw/segment-wise/dealer", dealerAuth, getSalesDataSegmentWiseForDealerMTDW);
-router.get("/sales-data-mtdw/channel-wise/dealer/by-dealer-code", getSalesDataChannelWiseForDealerByDealerCodeMTDW);
-router.get("/sales-data-mtdw/segment-wise/dealer/by-dealer-code", getSalesDataSegmentWiseForDealerByDealerCodeMTDW);
 
 // Utilities
 router.get("/sales-data-mtdw/get-all-subordinates-mtdw", userAuth, getAllSubordinatesMTDW);
