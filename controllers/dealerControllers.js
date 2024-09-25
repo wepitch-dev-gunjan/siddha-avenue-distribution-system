@@ -7,91 +7,9 @@ const { JWT_SECRET } = process.env;
 const { token } = require("../middlewares/authMiddlewares");
 const SalesDataMTDW = require('../models/SalesDataMTDW');
 require("dotenv").config();
+const csvParser = require("csv-parser");
+const { Readable } = require("stream");
 
-// exports.addDealer = async (req, res) => {
-//   try {
-//     const {
-//       dealerCode,
-//       shopName,
-//       shopArea,
-//       shopAddress,
-//       owner,                   // Nested object with required fields like name and contactNumber
-//       anniversaryDate,
-//       otherImportantFamilyDates, // Array of objects
-//       businessDetails,          // Nested object with typeOfBusiness and yearsInBusiness
-//       specialNotes,
-//       password                 // Add password field
-//     } = req.body;
-
-//     // Basic Validations
-//     if (!dealerCode || !shopName || !shopArea || !shopAddress || !owner?.name || !owner?.contactNumber || !password) {
-//       return res.status(400).json({ error: 'Please provide all the required fields: dealerCode, shopName, shopArea, shopAddress, owner\'s name, owner\'s contact number, and password.' });
-//     }
-
-//     // Check if the dealer code already exists in the database
-//     const existingDealer = await Dealer.findOne({ dealerCode });
-//     if (existingDealer) {
-//       return res.status(400).json({ error: 'Dealer code already exists. Please provide a unique dealer code.' });
-//     }
-
-//     // Hash the password
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     // Create a new Dealer with all fields
-//     const newDealer = new Dealer({
-//       dealerCode,
-//       shopName,
-//       shopArea,
-//       shopAddress,
-//       owner: {
-//         name: owner.name,
-//         position: owner.position,                // Optional
-//         contactNumber: owner.contactNumber,
-//         email: owner.email,                      // Optional
-//         homeAddress: owner.homeAddress,          // Optional
-//         birthday: owner.birthday,                // Optional
-//         wife: {
-//           name: owner?.wife?.name,               // Optional
-//           birthday: owner?.wife?.birthday        // Optional
-//         },
-//         children: owner.children || [],          // Optional array
-//         otherFamilyMembers: owner.otherFamilyMembers || []  // Optional array
-//       },
-//       anniversaryDate,                // Optional
-//       otherImportantFamilyDates,       // Optional array
-//       businessDetails: {
-//         typeOfBusiness: businessDetails?.typeOfBusiness,   // Optional
-//         yearsInBusiness: businessDetails?.yearsInBusiness, // Optional
-//         preferredCommunicationMethod: businessDetails?.preferredCommunicationMethod // Optional
-//       },
-//       specialNotes,                     // Optional
-//       password: hashedPassword           // Store the hashed password
-//     });
-
-//     await newDealer.save();
-
-//     // Generate a token
-//     const token = jwt.sign(
-//       {
-//         dealer_id: newDealer._id,
-//         dealerCode: newDealer.dealerCode,
-//         shopName: newDealer.shopName,
-//         ownerName: newDealer.owner.name,
-//       },
-//       JWT_SECRET,
-//       { expiresIn: '7d' }
-//     );
-
-//     return res.status(200).json({
-//       message: 'Dealer added successfully.',
-//       data: newDealer,
-//       token
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// };
 
 exports.addDealer = async (req, res) => {
   try {
@@ -192,44 +110,6 @@ exports.addDealer = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
-// exports.getDealer = async (req, res) => {
-//   try {
-//     const { dealer_id } = req;
-
-//     // Validate that dealerCode is provided
-//     if (!dealer_id) {
-//       return res.status(400).json({ error: 'Dealer Id not found in the token!' });
-//     }
-
-//     // Find the dealer by dealerCode
-//     const dealer = await Dealer.findOne({ _id : dealer_id });
-
-//     // If dealer is not found
-//     if (!dealer) {
-//       return res.status(404).json({ error: 'Dealer not found.' });
-//     }
-
-//     // Return the dealer data excluding the password
-//     return res.status(200).json({
-//       message: 'Dealer retrieved successfully.',
-//       data: {
-//         dealerCode: dealer.dealerCode,
-//         shopName: dealer.shopName,
-//         shopArea: dealer.shopArea,
-//         shopAddress: dealer.shopAddress,
-//         owner: dealer.owner,
-//         anniversaryDate: dealer.anniversaryDate,
-//         otherImportantFamilyDates: dealer.otherImportantFamilyDates,
-//         businessDetails: dealer.businessDetails,
-//         specialNotes: dealer.specialNotes
-//       }
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// };
 
 exports.getDealer = async (req, res) => {
   try {
@@ -638,3 +518,74 @@ exports.capitalizeDealerCodes = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+exports.updateDealerCategoryFromCSV = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).send("No file uploaded");
+    }
+
+    let csvData = [];
+
+    if (req.file.originalname.endsWith(".csv")) {
+      // Create a readable stream from the uploaded CSV buffer
+      const stream = new Readable();
+      stream.push(req.file.buffer);
+      stream.push(null);
+
+      // Parse CSV and collect rows in memory
+      stream
+        .pipe(csvParser())
+        .on("data", (data) => {
+          csvData.push(data);
+        })
+        .on("end", async () => {
+          try {
+            // Fetch all dealers from the database
+            const dealers = await Dealer.find({});
+
+            // Initialize counters
+            let matchedCount = 0;
+            let totalDealers = dealers.length;
+
+            // Process each dealer to update their category
+            for (const dealer of dealers) {
+              const csvRow = csvData.find(row => row['dealerCode'] === dealer.dealerCode);
+
+              if (csvRow) {
+                // Update the category from the CSV
+                dealer.dealerCategory = csvRow['category'];
+                matchedCount++; // Increase count for matched dealers
+              } else {
+                // If dealerCategory is missing, or if not found in CSV, set it to 'N/A'
+                if (!dealer.dealerCategory || dealer.dealerCategory === '') {
+                  dealer.dealerCategory = 'N/A';
+                }
+              }
+
+              // Save updated dealer info
+              await dealer.save();
+            }
+
+            // Return the result with counts
+            return res.status(200).send({
+              message: 'Dealer categories updated successfully.',
+              totalDealers: totalDealers,
+              matchedDealersInCSV: matchedCount,
+              unmatchedDealers: totalDealers - matchedCount,
+            });
+          } catch (error) {
+            console.error("Error processing CSV: ", error);
+            return res.status(500).send("Error processing CSV and updating dealers.");
+          }
+        });
+    } else {
+      res.status(400).send("Unsupported file format. Please upload a CSV file.");
+    }
+  } catch (error) {
+    console.error("Internal server error: ", error);
+    return res.status(500).send("Internal server error");
+  }
+};
+
+

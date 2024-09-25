@@ -108,6 +108,10 @@ const dealerSchema = new Schema({
   password: {
     type: String,
   },
+  dealerCategory: {
+    type: String,
+    default: 'N/A' // Add a default value if needed
+  },
 }, {
   timestamps: true,
   strict: false
