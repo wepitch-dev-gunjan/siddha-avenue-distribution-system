@@ -17,7 +17,8 @@ const {
     getSalesDataSegmentWiseByPositionCategoryMTDW,
     getSalesDataSegmentWiseBySubordinateNameMTDW,
     getSalesDataChannelWiseBySubordinateNameMTDW,
-    getDealerListForEmployee
+    getDealerListForEmployee,
+    getSalesDataChannelWiseForDealerByDealerCodeMTDW
 } = require("../controllers/salesDataMTDWController");
 const { dealerAuth, userAuth } = require("../middlewares/authMiddlewares");
 
@@ -39,6 +40,7 @@ router.get("/sales-data-mtdw/get-dealer-list-for-employees", userAuth, getDealer
 router.get("/sales-data-mtdw/dashboard/dealer", dealerAuth,  getSalesDashboardDataForDealerMTDW);
 router.get("/sales-data-mtdw/channel-wise/dealer", dealerAuth, getSalesDataChannelWiseForDealerMTDW);
 router.get("/sales-data-mtdw/segment-wise/dealer", dealerAuth, getSalesDataSegmentWiseForDealerMTDW);
+router.get("/sales-data-mtdw/channel-wise/dealer/by-dealer-code", getSalesDataChannelWiseForDealerByDealerCodeMTDW);
 
 // Utilities
 router.get("/sales-data-mtdw/get-all-subordinates-mtdw", userAuth, getAllSubordinatesMTDW);
