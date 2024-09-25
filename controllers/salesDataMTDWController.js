@@ -2617,8 +2617,150 @@ exports.getSalesDataSegmentWiseBySubordinateNameMTDW = async (req, res) => {
   }
 };
 
+// exports.getDealerListForEmployee = async (req, res) => {
+//   try{
+//     let { code } = req;
+//     let { start_date, end_date, data_format, dealer_category } = req.query;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required!"});
+//     }
+
+//     const employeeCodeUpper = code.toUpperCase();
+
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+//     if (!employee) {
+//       return res.status(400).send({ error: "Employee not found with this code!!" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+
+//     if (!data_format) data_format = 'value';
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear, new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     // Query for dealers list 
+//     const dealerListQuery = [
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timsezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: {$gte: startDate, $lte: endDate},
+//           "SALES TYPE" : "Sell Out",
+//           [position] : name
+          
+//         }
+//       },
+
+//     ]
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// }
 
 // DEALER APIs 
+
+exports.getDealerListForEmployee = async (req, res) => {
+  try {
+    let { code } = req;
+    let { start_date, end_date, data_format, dealer_category } = req.query;
+
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required!"});
+    }
+
+    const employeeCodeUpper = code.toUpperCase();
+
+    console.log("CODE: ", employeeCodeUpper);
+
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+    if (!employee) {
+      return res.status(400).send({ error: "Employee not found with this code!!" });
+    }
+
+    const { Name: name, Position: position } = employee;
+    console.log("Name and Position: ", name, position)
+
+    if (!data_format) data_format = 'value';
+
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    // Query for dealers list 
+    const dealerListQuery = [
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: { $gte: startDate, $lte: endDate },
+          "SALES TYPE": "Sell Out",
+          [position]: name  // Dynamically match the position field to the employee's name
+        }
+      },
+      {
+        $project: {
+          _id: 0,  // Hide the MongoDB ID
+          "BUYER CODE": 1,  // Include BUYER CODE in the result
+          "BUYER": 1,       // Include BUYER name in the result
+        }
+      }
+    ];
+
+    const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+
+    if (!dealers.length) {
+      return res.status(404).send({ message: "No matching dealers found!" });
+    }
+
+    // Return the list of dealers with BUYER CODE and BUYER
+    return res.status(200).send(dealers);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
+
+
 exports.getSalesDashboardDataForDealerMTDW = async (req, res) => {
   try {
     let { dealerCode } = req;
@@ -3399,6 +3541,8 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
+
+
 
 // Utilities 
 exports.getAllSubordinatesMTDW = async (req, res) => {
