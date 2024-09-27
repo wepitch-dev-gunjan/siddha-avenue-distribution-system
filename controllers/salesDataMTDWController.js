@@ -335,7 +335,7 @@ exports.getSalesDataChannelWiseForEmployeeMTDW = async (req, res) => {
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS Plus", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -907,7 +907,7 @@ exports.getSalesDataChannelWiseBySubordinateCodeMTDW = async (req, res) => {
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS Plus", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -1513,7 +1513,7 @@ exports.getSalesDataChannelWiseByPositionCategoryMTDW = async (req, res) => {
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS Plus", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -2076,7 +2076,7 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS Plus", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -2876,7 +2876,7 @@ exports.getSalesDataChannelWiseForDealerMTDW = async (req, res) => {
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS PLUS", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -3422,7 +3422,7 @@ exports.getSalesDataChannelWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "SCP", "SIS PLUS", "SIS PRO", "STAR DCM", "SES", "SDP", "RRF EXT", "SES-LITE"
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
 
     const defaultRow = {
@@ -4309,7 +4309,6 @@ exports.getDealerListForEmployee = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
-
 
 exports.getDealerListForEmployeeByCode = async (req, res) => {
   try {
