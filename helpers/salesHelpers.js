@@ -71,7 +71,24 @@ exports.parseDate = (dateString) => {
 };
 
 
+// exports.formatNumberIndian = (num) => {
+//   if (num >= 1e7) {
+//     return (num / 1e7).toFixed(2) + ' Cr';
+//   }
+//   if (num >= 1e5) {
+//     return (num / 1e5).toFixed(2) + ' L';
+//   }
+//   if (num >= 1e3) {
+//     return (num / 1e3).toFixed(2) + ' K';
+//   }
+//   return num.toString();
+// };
+
 exports.formatNumberIndian = (num) => {
+  if (num === undefined || num === null || isNaN(num)) {
+    return ''; // or any default value you prefer
+  }
+
   if (num >= 1e7) {
     return (num / 1e7).toFixed(2) + ' Cr';
   }
@@ -81,5 +98,7 @@ exports.formatNumberIndian = (num) => {
   if (num >= 1e3) {
     return (num / 1e3).toFixed(2) + ' K';
   }
+
   return num.toString();
 };
+
