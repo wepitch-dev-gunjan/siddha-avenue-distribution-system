@@ -1358,8 +1358,6 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       ftdDataMap[item._id] = item['FTD'] || 0;
     });
 
-
-
     let report = segments.map(segment => {
       let segmentData = salesStats.find(item => item._id === segment) || {};
       let lmtValue = lmtDataMap[segment] || 0;
