@@ -18,44 +18,53 @@ exports.uploadSalesDataMTDW = async (req, res) => {
     let results = [];
 
     if (req.file.originalname.endsWith(".csv")) {
-      // Parse CSV file
       const stream = new Readable();
       stream.push(req.file.buffer);
       stream.push(null);
       stream
         .pipe(csvParser())
         .on("data", (data) => {
-          // Collect all data rows first
           results.push(data);
         })
         .on("end", async () => {
           try {
             let newEntries = [];
 
-            // Process each row asynchronously
             for (let data of results) {
-              // Generate iuid by concatenating all the column values
-              const iuid = Object.values(data).join('|'); // Join all values using a delimiter
-              console.log("IUID: ", iuid)
+              const iuid = Object.values(data).join('|');
+              console.log("IUID: ", iuid);
 
-              // Check if the iuid already exists in the database
               const existingRecord = await SalesDataMTDW.findOne({ iuid });
 
               if (!existingRecord) {
-                // If iuid does not exist, add the iuid to the data
-                data.iuid = iuid;
+                // Deep clone the data object to avoid modification issues
+                const newData = JSON.parse(JSON.stringify(data)); 
 
-                // Extract month from the DATE field
-                const dateParts = data.DATE.split("/");
-                const month = dateParts[0]; // Assuming the DATE format is "MM/DD/YYYY"
-                data.month = month;
+                newData.iuid = iuid;
 
-                newEntries.push(data);
+                const dateParts = newData.DATE.split("/");
+                const month = dateParts[0];
+                newData.month = month;
+
+                // Ensure MTD VOLUME and MTD VALUE are valid numbers
+                const mtdValue = parseFloat(newData['MTD VALUE']) || 0;
+                const mtdVolume = parseFloat(newData['MTD VOLUME']) || 1;  // Avoid division by zero
+                const price = mtdValue / mtdVolume;
+                const segment = newData['Segment New'];
+                // console.log("Sekajsdh: ", segment);
+                // Categorize Tab based on price or keep Segment Final same as Segment New
+                if (segment === "Tab") {
+                  // console.log("newData['Segment New']")
+                  newData['Segment Final'] = price > 40000 ? 'Tab>40k' : 'Tab<40k';
+                } else {
+                  newData['Segment Final'] = newData['Segment New'];  // For non-Tab, keep Segment New same
+                }
+
+                newEntries.push(newData);  // Push the deeply cloned data
               }
             }
 
             if (newEntries.length > 0) {
-              // Insert new entries into MongoDB
               await SalesDataMTDW.insertMany(newEntries);
               res.status(200).send("Data inserted into database");
             } else {
@@ -75,7 +84,6 @@ exports.uploadSalesDataMTDW = async (req, res) => {
   }
 };
 
-// EMPLOYEE APIs 
 exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
   try {
     let { code } = req;
@@ -605,7 +613,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K",
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -672,7 +680,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -708,7 +716,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -745,7 +753,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -1180,7 +1188,7 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K", 
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -1247,7 +1255,7 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -1283,7 +1291,7 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -1320,7 +1328,7 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -1791,7 +1799,7 @@ exports.getSalesDataSegmentWiseByPositionCategoryMTDW = async (req, res) => {
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K", 
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -1858,7 +1866,7 @@ exports.getSalesDataSegmentWiseByPositionCategoryMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -1894,7 +1902,7 @@ exports.getSalesDataSegmentWiseByPositionCategoryMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -1931,7 +1939,7 @@ exports.getSalesDataSegmentWiseByPositionCategoryMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -2345,7 +2353,7 @@ exports.getSalesDataSegmentWiseBySubordinateNameMTDW = async (req, res) => {
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K",
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -2412,7 +2420,7 @@ exports.getSalesDataSegmentWiseBySubordinateNameMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -2448,7 +2456,7 @@ exports.getSalesDataSegmentWiseBySubordinateNameMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -2485,7 +2493,7 @@ exports.getSalesDataSegmentWiseBySubordinateNameMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -3133,7 +3141,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K", 
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -3196,7 +3204,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -3232,7 +3240,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -3269,7 +3277,7 @@ exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -3678,7 +3686,7 @@ exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
     // Default segments, including smartphones and tablets
     const segments = [
       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K", 
-      "Tab >40K", "Tab <40K", "Wearable"
+      "Tab>40k", "Tab<40k", "Wearable"
     ];
 
     const defaultRow = {
@@ -3741,7 +3749,7 @@ exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise aggregation
+          _id: "$Segment Final",  // Segment-wise aggregation
           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
         }
@@ -3777,7 +3785,7 @@ exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise LMTD aggregation
+          _id: "$Segment Final",  // Segment-wise LMTD aggregation
           "LMTD VALUE": {
             $sum: {
               $convert: {
@@ -3814,7 +3822,7 @@ exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
       },
       {
         $group: {
-          _id: "$Segment New",  // Segment-wise FTD aggregation
+          _id: "$Segment Final",  // Segment-wise FTD aggregation
           "FTD": {
             $sum: {
               $convert: {
@@ -4390,6 +4398,300 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 
 
 
+// exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
+//   try {
+//     let { code } = req;
+//     let { start_date, end_date, data_format } = req.query;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required" });
+//     }
+
+//     // Convert employee code to uppercase
+//     const employeeCodeUpper = code.toUpperCase();
+
+//     // Fetch employee details based on the code
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+//     if (!employee) {
+//       return res.status(404).send({ error: "Employee not found with the given code" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+
+//     // Default segments, including smartphones and tablets
+//     const segments = [
+//       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K",
+//       "Tab >40K", "Tab <40K", "Wearable"
+//     ];
+
+//     const defaultRow = {
+//       "Segment Wise": "",
+//       "Target Vol": 0,
+//       "Mtd Vol": 0,
+//       "Lmtd Vol": 0,
+//       "Pending Vol": 0,
+//       "ADS": 0,
+//       "Req. ADS": 0,
+//       "% Gwth Vol": 0,
+//       "Target SO": 0,
+//       "Activation MTD": 0,
+//       "Activation LMTD": 0,
+//       "Pending Act": 0,
+//       "ADS Activation": 0,
+//       "Req. ADS Activation": 0,
+//       "% Gwth Val": 0,
+//       "FTD": 0,
+//       "Contribution %": 0
+//     };
+
+//     if (!name || !position) {
+//       return res.status(400).send({ error: "Name and position parameters are required" });
+//     }
+
+//     if (!data_format) data_format = 'value';
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const presentDayOfMonth = new Date().getDate();
+
+//     // Fetch target values and volumes by segment
+//     const { targetValuesBySegment, targetVolumesBySegment } = await fetchTargetValuesAndVolumes(endDate, name, position);
+
+//     // Query for MTD data
+//     const salesStatsQuery = [
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: startDate, $lte: endDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",  // Segment-wise aggregation
+//           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
+//           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
+//         }
+//       }
+//     ];
+
+//     const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
+
+//     // Query for LMTD data (previous month's data)
+//     let previousMonthStartDate = new Date(startDate);
+//     previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+//     let previousMonthEndDate = new Date(endDate);
+//     previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+
+//     const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",  // Segment-wise LMTD aggregation
+//           "LMTD VALUE": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Query for FTD data
+//     const ftdData = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: endDate,
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment New",  // Segment-wise FTD aggregation
+//           "FTD": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Handle smartphone segments separately for >40K and <40K
+//     let greaterThan40KSmartphones = salesStats
+//       .filter(item => item._id.includes("K") && parseFloat(item._id.split("-")[0]) > 40)
+//       .reduce((acc, item) => {
+//         acc["MTD VALUE"] += item["MTD VALUE"];
+//         acc["TARGET VALUE"] += item["TARGET VALUE"];
+//         return acc;
+//       }, { "MTD VALUE": 0, "TARGET VALUE": 0 });
+
+//     let lessThan40KSmartphones = salesStats
+//       .filter(item => item._id.includes("K") && parseFloat(item._id.split("-")[0]) <= 40)
+//       .reduce((acc, item) => {
+//         acc["MTD VALUE"] += item["MTD VALUE"];
+//         acc["TARGET VALUE"] += item["TARGET VALUE"];
+//         return acc;
+//       }, { "MTD VALUE": 0, "TARGET VALUE": 0 });
+
+//     // Build the report logic with all segments and include LMTD and FTD
+//     let lmtDataMap = {};
+//     let ftdDataMap = {};
+//     lastMonthSalesStats.forEach(item => {
+//       lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
+//     });
+//     ftdData.forEach(item => {
+//       ftdDataMap[item._id] = item['FTD'] || 0;
+//     });
+
+//     let totalMTDSales = 0;
+//     let report = segments.map(segment => {
+//       let segmentData = salesStats.find(item => item._id === segment) || {};
+//       let lmtValue = lmtDataMap[segment] || 0;
+//       let ftdValue = ftdDataMap[segment] || 0;
+    
+//       // Safely access target values and volumes, defaulting to 0 if undefined
+//       let targetVol = (targetVolumesBySegment && targetVolumesBySegment[segment]) ? targetVolumesBySegment[segment] : 0;
+//       let mtdVol = segmentData['MTD VALUE'] || 0;
+//       let lmtdVol = lmtValue;
+    
+//       totalMTDSales += mtdVol;
+    
+//       let pendingVol = targetVol - mtdVol;
+//       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+//       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
+    
+//       return {
+//         "Segment Wise": segment,
+//         "Target Vol": targetVol,
+//         "Mtd Vol": mtdVol,
+//         "Lmtd Vol": lmtdVol,
+//         "Pending Vol": pendingVol,
+//         "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+//         "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//         "% Gwth Vol": growthVol.toFixed(2),
+//         "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+//         "Activation MTD": mtdVol,
+//         "Activation LMTD": lmtdVol,
+//         "Pending Act": pendingVol,
+//         "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+//         "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//         "% Gwth Val": growthVol.toFixed(2),
+//         "FTD": ftdValue,
+//         "Contribution %": contribution
+//       };
+//     });
+
+//     // Grand total logic
+//     let grandTotal = report.reduce(
+//       (total, row) => {
+//         Object.keys(row).forEach(key => {
+//           if (key !== "Segment Wise") total[key] += parseFloat(row[key]) || 0;
+//         });
+//         return total;
+//       },
+//       { ...defaultRow, "Segment Wise": "Grand Total" }
+//     );
+
+//     grandTotal = {
+//       ...grandTotal,
+//       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+//       "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+//     };
+
+//     report.unshift(grandTotal); // Insert the grand total as the first row
+
+//     // Column names as array
+//     const columnNames = [
+//       "Segment Wise",
+//       "Target Vol",
+//       "Mtd Vol",
+//       "Lmtd Vol",
+//       "Pending Vol",
+//       "ADS",
+//       "Req. ADS",
+//       "% Gwth Vol",
+//       "Target SO",
+//       "Activation MTD",
+//       "Activation LMTD",
+//       "Pending Act",
+//       "ADS Activation",
+//       "Req. ADS Activation",
+//       "% Gwth Val",
+//       "FTD",
+//       "Contribution %"
+//     ];
+
+//     res.status(200).json({ columns: columnNames, data: report });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
 
 
 // exports.getSalesDataSegmentWiseForDealerMTDW = async (req, res) => {
@@ -6699,6 +7001,73 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 //   }
 // };
 
+// exports.uploadSalesDataMTDW = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).send("No file uploaded");
+//     }
+
+//     let results = [];
+
+//     if (req.file.originalname.endsWith(".csv")) {
+//       // Parse CSV file
+//       const stream = new Readable();
+//       stream.push(req.file.buffer);
+//       stream.push(null);
+//       stream
+//         .pipe(csvParser())
+//         .on("data", (data) => {
+//           // Collect all data rows first
+//           results.push(data);
+//         })
+//         .on("end", async () => {
+//           try {
+//             let newEntries = [];
+
+//             // Process each row asynchronously
+//             for (let data of results) {
+//               // Generate iuid by concatenating all the column values
+//               const iuid = Object.values(data).join('|'); // Join all values using a delimiter
+//               console.log("IUID: ", iuid)
+
+//               // Check if the iuid already exists in the database
+//               const existingRecord = await SalesDataMTDW.findOne({ iuid });
+
+//               if (!existingRecord) {
+//                 // If iuid does not exist, add the iuid to the data
+//                 data.iuid = iuid;
+
+//                 // Extract month from the DATE field
+//                 const dateParts = data.DATE.split("/");
+//                 const month = dateParts[0]; // Assuming the DATE format is "MM/DD/YYYY"
+//                 data.month = month;
+
+//                 newEntries.push(data);
+//               }
+//             }
+
+//             if (newEntries.length > 0) {
+//               // Insert new entries into MongoDB
+//               await SalesDataMTDW.insertMany(newEntries);
+//               res.status(200).send("Data inserted into database");
+//             } else {
+//               res.status(200).send("No new data to insert, all entries already exist.");
+//             }
+//           } catch (error) {
+//             console.log(error);
+//             res.status(500).send("Error inserting data into database");
+//           }
+//         });
+//     } else {
+//       res.status(400).send("Unsupported file format");
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).send("Internal server error");
+//   }
+// };
+
+// EMPLOYEE APIs 
 
 
 
