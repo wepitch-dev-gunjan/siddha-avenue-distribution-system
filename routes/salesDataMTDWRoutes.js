@@ -22,7 +22,8 @@ const {
     getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW,
     getDealerListForEmployeeByCode,
     getSalesDashboardDataByEmployeeCodeMTDW,
-    getSalesDashboardDataByDealerCodeMTDW
+    getSalesDashboardDataByDealerCodeMTDW,
+    getSalesDashboardDataByEmployeeNameMTDW
 } = require("../controllers/salesDataMTDWController");
 const { dealerAuth, userAuth } = require("../middlewares/authMiddlewares");
 
@@ -31,6 +32,7 @@ router.post("/sales-data-mtdw", upload.single("file"), uploadSalesDataMTDW);
 // EMPLOYEE ROUTES 
 router.get("/sales-data-mtdw/dashboard/employee", userAuth,  getSalesDashboardDataForEmployeeMTDW);
 router.get("/sales-data-mtdw/dashboard/by-employee-code", getSalesDashboardDataByEmployeeCodeMTDW);
+router.get("/sales-data-mtdw/dashboard/by-employee-name", getSalesDashboardDataByEmployeeNameMTDW);
 router.get("/sales-data-mtdw/channel-wise/employee", userAuth, getSalesDataChannelWiseForEmployeeMTDW);
 router.get("/sales-data-mtdw/segment-wise/employee", userAuth, getSalesDataSegmentWiseForEmployeeMTDW);
 router.get("/sales-data-mtdw/channel-wise/by-subordinate-code/:subordinate_code", getSalesDataChannelWiseBySubordinateCodeMTDW);
