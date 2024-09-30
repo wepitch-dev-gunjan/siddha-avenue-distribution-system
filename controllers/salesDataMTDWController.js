@@ -5200,290 +5200,290 @@ exports.getSalesDataSegmentWiseForEmployeeByDealerCodeMTDW = async (req, res) =>
 
 
 // Dealer wise 
-// exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
-//   try {
-//     let { code } = req;
-//     let { td_format, start_date, end_date, data_format, position_category, dealer_category } = req.query;
+exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
+  try {
+    let { code } = req;
+    let { td_format, start_date, end_date, data_format, position_category, dealer_category } = req.query;
 
-//     if (!code) {
-//       return res.status(400).send({ error: "Employee code is required" });
-//     }
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required" });
+    }
 
-//     // Convert employee code to uppercase
-//     const employeeCodeUpper = code.toUpperCase();
+    // Convert employee code to uppercase
+    const employeeCodeUpper = code.toUpperCase();
 
-//     // Fetch employee details based on the code
-//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+    // Fetch employee details based on the code
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
 
-//     if (!employee) {
-//       return res.status(404).send({ error: "Employee not found with the given code" });
-//     }
+    if (!employee) {
+      return res.status(404).send({ error: "Employee not found with the given code" });
+    }
 
-//     const { Name: name, Position: position } = employee;
+    const { Name: name, Position: position } = employee;
 
-//     // Call the getAllSubordinatesByCodeMTDW API
-//     const subordinateRes = await axios.get(
-//       `${BACKEND_URL}/sales-data-mtdw/get-all-subordinates-by-code-mtdw/${code}`
-//     );
+    // Call the getAllSubordinatesByCodeMTDW API
+    const subordinateRes = await axios.get(
+      `${BACKEND_URL}/sales-data-mtdw/get-all-subordinates-by-code-mtdw/${code}`
+    );
     
-//     // Extract the list of subordinates for the provided position category
-//     const subordinates = subordinateRes.data[position_category] || [];
+    // Extract the list of subordinates for the provided position category
+    const subordinates = subordinateRes.data[position_category] || [];
 
-//     // Default channels and columns
-//     const channels = [
-//       "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
-//     ];
+    // Default channels and columns
+    const channels = [
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
+    ];
 
-//     const defaultRow = {
-//       "Category Wise": "",
-//       "Target Vol": 0,
-//       "Mtd Vol": 0,
-//       "Lmtd Vol": 0,
-//       "Pending Vol": 0,
-//       "ADS": 0,
-//       "Req. ADS": 0,
-//       "% Gwth Vol": 0,
-//       "Target SO": 0,
-//       "Activation MTD": 0,
-//       "Activation LMTD": 0,
-//       "Pending Act": 0,
-//       "ADS Activation": 0,
-//       "Req. ADS Activation": 0,
-//       "% Gwth Val": 0,
-//       "FTD": 0,
-//       "Contribution %": 0
-//     };
+    const defaultRow = {
+      "Category Wise": "",
+      "Target Vol": 0,
+      "Mtd Vol": 0,
+      "Lmtd Vol": 0,
+      "Pending Vol": 0,
+      "ADS": 0,
+      "Req. ADS": 0,
+      "% Gwth Vol": 0,
+      "Target SO": 0,
+      "Activation MTD": 0,
+      "Activation LMTD": 0,
+      "Pending Act": 0,
+      "ADS Activation": 0,
+      "Req. ADS Activation": 0,
+      "% Gwth Val": 0,
+      "FTD": 0,
+      "Contribution %": 0
+    };
 
-//     if (!name || !position) {
-//       return res.status(400).send({ error: "Name and position parameters are required" });
-//     }
+    if (!name || !position) {
+      return res.status(400).send({ error: "Name and position parameters are required" });
+    }
 
-//     if (!td_format) td_format = 'MTD';
+    if (!td_format) td_format = 'MTD';
 
-//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-//     let endDate = end_date ? new Date(end_date) : new Date();
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
 
-//     const parseDate = (dateString) => {
-//       const [month, day, year] = dateString.split('/');
-//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
-//     };
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
 
-//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
-//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
 
-//     const presentDayOfMonth = new Date().getDate();
+    const presentDayOfMonth = new Date().getDate();
 
-//     // Fetch target values and volumes by channel
-//     const { targetValuesByChannel, targetVolumesByChannel } = await fetchTargetValuesAndVolumesByChannel(endDate, name, position);
+    // Fetch target values and volumes by channel
+    const { targetValuesByChannel, targetVolumesByChannel } = await fetchTargetValuesAndVolumesByChannel(endDate, name, position);
 
-//     // Modify the query to match only the subordinates in salesDataMTDW
-//     let salesStatsQuery = [
-//       {
-//         $addFields: {
-//           parsedDate: {
-//             $dateFromString: {
-//               dateString: "$DATE",
-//               format: "%m/%d/%Y",
-//               timezone: "UTC"
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $match: {
-//           parsedDate: { $gte: startDate, $lte: endDate },
-//           "SALES TYPE": "Sell Out",
-//           [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$OLS TYPE",
-//           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
-//           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
-//         }
-//       }
-//     ];
+    // Modify the query to match only the subordinates in salesDataMTDW
+    let salesStatsQuery = [
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: { $gte: startDate, $lte: endDate },
+          "SALES TYPE": "Sell Out",
+          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
+          "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
+        }
+      }
+    ];
 
-//     const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
+    const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
 
-//     // Query for LMTD data
-//     let previousMonthStartDate = new Date(startDate);
-//     previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
-//     let previousMonthEndDate = new Date(endDate);
-//     previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+    // Query for LMTD data
+    let previousMonthStartDate = new Date(startDate);
+    previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+    let previousMonthEndDate = new Date(endDate);
+    previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
 
-//     const lastMonthSalesStats = await SalesDataMTDW.aggregate([
-//       {
-//         $addFields: {
-//           parsedDate: {
-//             $dateFromString: {
-//               dateString: "$DATE",
-//               format: "%m/%d/%Y",
-//               timezone: "UTC"
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $match: {
-//           parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
-//           "SALES TYPE": "Sell Out",
-//           [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$OLS TYPE",
-//           "LMTD VALUE": {
-//             $sum: {
-//               $convert: {
-//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
-//                 to: "int",
-//                 onError: 0,
-//                 onNull: 0
-//               }
-//             }
-//           }
-//         }
-//       }
-//     ]);
+    const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+          "SALES TYPE": "Sell Out",
+          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "LMTD VALUE": {
+            $sum: {
+              $convert: {
+                input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
 
-//     // Query for FTD data
-//     const ftdData = await SalesDataMTDW.aggregate([
-//       {
-//         $addFields: {
-//           parsedDate: {
-//             $dateFromString: {
-//               dateString: "$DATE",
-//               format: "%m/%d/%Y",
-//               timezone: "UTC"
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $match: {
-//           parsedDate: endDate,
-//           "SALES TYPE": "Sell Out",
-//           [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$OLS TYPE",
-//           "FTD": {
-//             $sum: {
-//               $convert: {
-//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
-//                 to: "int",
-//                 onError: 0,
-//                 onNull: 0
-//               }
-//             }
-//           }
-//         }
-//       }
-//     ]);
+    // Query for FTD data
+    const ftdData = await SalesDataMTDW.aggregate([
+      {
+        $addFields: {
+          parsedDate: {
+            $dateFromString: {
+              dateString: "$DATE",
+              format: "%m/%d/%Y",
+              timezone: "UTC"
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          parsedDate: endDate,
+          "SALES TYPE": "Sell Out",
+          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+        }
+      },
+      {
+        $group: {
+          _id: "$OLS TYPE",
+          "FTD": {
+            $sum: {
+              $convert: {
+                input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
 
-//     // Build the report logic with all channels and include LMTD and FTD
-//     let lmtDataMap = {};
-//     let ftdDataMap = {};
-//     lastMonthSalesStats.forEach(item => {
-//       lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
-//     });
-//     ftdData.forEach(item => {
-//       ftdDataMap[item._id] = item['FTD'] || 0;
-//     });
+    // Build the report logic with all channels and include LMTD and FTD
+    let lmtDataMap = {};
+    let ftdDataMap = {};
+    lastMonthSalesStats.forEach(item => {
+      lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
+    });
+    ftdData.forEach(item => {
+      ftdDataMap[item._id] = item['FTD'] || 0;
+    });
 
-//     let totalMTDSales = 0;
-//     let report = channels.map(channel => {
-//       let channelData = salesStats.find(item => item._id === channel) || {};
-//       let lmtValue = lmtDataMap[channel] || 0;
-//       let ftdValue = ftdDataMap[channel] || 0;
+    let totalMTDSales = 0;
+    let report = channels.map(channel => {
+      let channelData = salesStats.find(item => item._id === channel) || {};
+      let lmtValue = lmtDataMap[channel] || 0;
+      let ftdValue = ftdDataMap[channel] || 0;
 
-//       let targetVol = targetVolumesByChannel[channel] || 0;
-//       let mtdVol = channelData['MTD VALUE'] || 0;
-//       let lmtdVol = lmtValue;
+      let targetVol = targetVolumesByChannel[channel] || 0;
+      let mtdVol = channelData['MTD VALUE'] || 0;
+      let lmtdVol = lmtValue;
 
-//       totalMTDSales += mtdVol;
+      totalMTDSales += mtdVol;
 
-//       let pendingVol = targetVol - mtdVol;
-//       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
-//       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
+      let pendingVol = targetVol - mtdVol;
+      let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+      let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
 
-//       return {
-//         "Category Wise": channel,
-//         "Target Vol": targetVol,
-//         "Mtd Vol": mtdVol,
-//         "Lmtd Vol": lmtdVol,
-//         "Pending Vol": pendingVol,
-//         "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
-//         "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-//         "% Gwth Vol": growthVol.toFixed(2),
-//         "Target SO": targetValuesByChannel[channel] || 0,
-//         "Activation MTD": mtdVol,
-//         "Activation LMTD": lmtdVol,
-//         "Pending Act": pendingVol,
-//         "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
-//         "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-//         "% Gwth Val": growthVol.toFixed(2),
-//         "FTD": ftdValue,
-//         "Contribution %": contribution
-//       };
-//     });
+      return {
+        "Category Wise": channel,
+        "Target Vol": targetVol,
+        "Mtd Vol": mtdVol,
+        "Lmtd Vol": lmtdVol,
+        "Pending Vol": pendingVol,
+        "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+        "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+        "% Gwth Vol": growthVol.toFixed(2),
+        "Target SO": targetValuesByChannel[channel] || 0,
+        "Activation MTD": mtdVol,
+        "Activation LMTD": lmtdVol,
+        "Pending Act": pendingVol,
+        "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+        "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+        "% Gwth Val": growthVol.toFixed(2),
+        "FTD": ftdValue,
+        "Contribution %": contribution
+      };
+    });
 
-//     // Grand total logic
-//     let grandTotal = report.reduce(
-//       (total, row) => {
-//         Object.keys(row).forEach(key => {
-//           if (key !== "Category Wise") total[key] += parseFloat(row[key]) || 0;
-//         });
-//         return total;
-//       },
-//       { ...defaultRow, "Category Wise": "Grand Total" }
-//     );
+    // Grand total logic
+    let grandTotal = report.reduce(
+      (total, row) => {
+        Object.keys(row).forEach(key => {
+          if (key !== "Category Wise") total[key] += parseFloat(row[key]) || 0;
+        });
+        return total;
+      },
+      { ...defaultRow, "Category Wise": "Grand Total" }
+    );
 
-//     grandTotal = {
-//       ...grandTotal,
-//       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
-//       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
-//       "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
-//       "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
-//       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
-//       "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
-//     };
+    grandTotal = {
+      ...grandTotal,
+      "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+      "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
+      "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+      "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
+      "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+    };
 
-//     report.unshift(grandTotal); // Insert the grand total as the first row
+    report.unshift(grandTotal); // Insert the grand total as the first row
 
-//     // Column names as array
-//     const columnNames = [
-//       "Category Wise",
-//       "Target Vol",
-//       "Mtd Vol",
-//       "Lmtd Vol",
-//       "Pending Vol",
-//       "ADS",
-//       "Req. ADS",
-//       "% Gwth Vol",
-//       "Target SO",
-//       "Activation MTD",
-//       "Activation LMTD",
-//       "Pending Act",
-//       "ADS Activation",
-//       "Req. ADS Activation",
-//       "% Gwth Val",
-//       "FTD",
-//       "Contribution %"
-//     ];
+    // Column names as array
+    const columnNames = [
+      "Category Wise",
+      "Target Vol",
+      "Mtd Vol",
+      "Lmtd Vol",
+      "Pending Vol",
+      "ADS",
+      "Req. ADS",
+      "% Gwth Vol",
+      "Target SO",
+      "Activation MTD",
+      "Activation LMTD",
+      "Pending Act",
+      "ADS Activation",
+      "Req. ADS Activation",
+      "% Gwth Val",
+      "FTD",
+      "Contribution %"
+    ];
 
-//     // Send response with column names and report data
-//     res.status(200).json({ columns: columnNames, data: report });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).send("Internal Server Error");
-//   }
-// };
+    // Send response with column names and report data
+    res.status(200).json({ columns: columnNames, data: report });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
 
 
 // Utilities 
@@ -5757,7 +5757,7 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
 
 exports.getDealerListForEmployee = async (req, res) => {
   try {
-    let { code } = req;
+    let { code } = req; 
     let { start_date, end_date, data_format, dealer_category } = req.query;
 
     if (!code) {
@@ -5765,7 +5765,6 @@ exports.getDealerListForEmployee = async (req, res) => {
     }
 
     const employeeCodeUpper = code.toUpperCase();
-
     console.log("CODE: ", employeeCodeUpper);
 
     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
@@ -5831,14 +5830,123 @@ exports.getDealerListForEmployee = async (req, res) => {
       return res.status(404).send({ message: "No matching dealers found!" });
     }
 
-    // Return the list of unique dealers with BUYER CODE and BUYER
-    return res.status(200).send(dealers);
+    // If dealer_category is "ALL" or not provided, return all dealers
+    if (!dealer_category || dealer_category === "ALL") {
+      return res.status(200).send(dealers);
+    }
+
+    // If dealer_category is "NPO" or "KRO", filter dealers based on the category
+    const dealerCodes = dealers.map(d => d['BUYER CODE']);
+
+    // Fetch dealer information from the Dealer model based on the provided dealer codes
+    const filteredDealers = await Dealer.find({
+      dealerCode: { $in: dealerCodes },
+      dealerCategory: dealer_category  // Match the dealer category
+    });
+
+    // Filter dealers that are in the selected category
+    const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+
+    // Update the dealers array to only include those in the selected category
+    const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
+
+    if (!filteredResult.length) {
+      return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
+    }
+
+    // Return the filtered result
+    return res.status(200).send(filteredResult);
 
   } catch (error) {
     console.error(error);
     return res.status(500).send("Internal Server Error");
   }
 };
+
+// exports.getDealerListForEmployeeByCode = async (req, res) => {
+//   try {
+//     let { start_date, end_date, data_format, dealer_category, code } = req.query;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required!"});
+//     }
+
+//     const employeeCodeUpper = code.toUpperCase();
+
+//     console.log("CODE: ", employeeCodeUpper);
+
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+//     if (!employee) {
+//       return res.status(400).send({ error: "Employee not found with this code!!" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+//     console.log("Name and Position: ", name, position)
+
+//     if (!data_format) data_format = 'value';
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     // Query for dealers list 
+//     const dealerListQuery = [
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: startDate, $lte: endDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name  // Dynamically match the position field to the employee's name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
+//           BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,  // Hide the MongoDB ID
+//           "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
+//           "BUYER": 1  // Include BUYER name in the result
+//         }
+//       }
+//     ];
+
+//     const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+
+//     if (!dealers.length) {
+//       return res.status(404).send({ message: "No matching dealers found!" });
+//     }
+
+//     // Return the list of unique dealers with BUYER CODE and BUYER
+//     return res.status(200).send(dealers);
+
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
+
 
 exports.getDealerListForEmployeeByCode = async (req, res) => {
   try {
@@ -5849,7 +5957,6 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
     }
 
     const employeeCodeUpper = code.toUpperCase();
-
     console.log("CODE: ", employeeCodeUpper);
 
     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
@@ -5859,7 +5966,7 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
     }
 
     const { Name: name, Position: position } = employee;
-    console.log("Name and Position: ", name, position)
+    console.log("Name and Position: ", name, position);
 
     if (!data_format) data_format = 'value';
 
@@ -5874,7 +5981,7 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
     startDate = parseDate(startDate.toLocaleDateString('en-US'));
     endDate = parseDate(endDate.toLocaleDateString('en-US'));
 
-    // Query for dealers list 
+    // Query for dealers list
     const dealerListQuery = [
       {
         $addFields: {
@@ -5915,15 +6022,38 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
       return res.status(404).send({ message: "No matching dealers found!" });
     }
 
-    // Return the list of unique dealers with BUYER CODE and BUYER
-    return res.status(200).send(dealers);
+    // If dealer_category is "ALL" or not provided, return all dealers
+    if (!dealer_category || dealer_category === "ALL") {
+      return res.status(200).send(dealers);
+    }
+
+    // If dealer_category is "NPO" or "KRO", filter dealers based on the category
+    const dealerCodes = dealers.map(d => d['BUYER CODE']);
+
+    // Fetch dealer information from the Dealer model based on the provided dealer codes
+    const filteredDealers = await Dealer.find({
+      dealerCode: { $in: dealerCodes },
+      dealerCategory: dealer_category  // Match the dealer category
+    });
+
+    // Filter dealers that are in the selected category
+    const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+
+    // Update the dealers array to only include those in the selected category
+    const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
+
+    if (!filteredResult.length) {
+      return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
+    }
+
+    // Return the filtered result
+    return res.status(200).send(filteredResult);
 
   } catch (error) {
     console.error(error);
     return res.status(500).send("Internal Server Error");
   }
 };
-
 
 
 
