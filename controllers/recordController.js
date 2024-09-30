@@ -2,15 +2,17 @@ const axios = require('axios'); // To make API calls
 const Record = require('../models/Record');
 const { BACKEND_URL } = process.env;
 
-// Add a new record
 exports.addRecord = async (req, res) => {
     try {
-        const { productId, dealerCode, quantity, modeOfPayment, uploadedBy, remarks } = req.body;
+        const { productId, dealerCode, quantity, modeOfPayment, remarks } = req.body;
+
+        // Extract code (employee code) directly from req
+        const { code } = req;
 
         // Validate required fields
-        if (!productId || !dealerCode || !quantity || !modeOfPayment || !uploadedBy) {
+        if (!productId || !dealerCode || !quantity || !modeOfPayment || !code) {
             return res.status(400).json({
-                error: 'Please provide all required fields: productId, dealerCode, quantity, modeOfPayment, and uploadedBy.'
+                error: 'Please provide all required fields: productId, dealerCode, quantity, modeOfPayment, and ensure the code is provided.'
             });
         }
 
@@ -34,7 +36,7 @@ exports.addRecord = async (req, res) => {
             date: new Date(), // Set the date as the current date
             quantity,
             modeOfPayment,
-            uploadedBy,
+            uploadedBy: code, // Set the employee code from req
             totalPrice,
             remarks
         });
