@@ -545,11 +545,11 @@ exports.getSalesDashboardDataByEmployeeCodeMTDW = async (req, res) => {
 
 exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
   try {
-    let { td_format, start_date, end_date, data_format, name, position } = req.query;
+    let { td_format, start_date, end_date, data_format, name, position_category } = req.query;
 
     // Validate that employee code is provided
-    if (!name || !position) {
-      return res.status(400).send({ error: "Name and position is required." });
+    if (!name || !position_category) {
+      return res.status(400).send({ error: "Name and position category is required." });
     }
 
     if (!td_format) td_format = 'MTD';
@@ -573,7 +573,7 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
         $gte: startDate,
         $lte: endDate
       },
-      [position]: name
+      [position_category]: name
     };
 
     const result = {};
@@ -629,7 +629,7 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
         { 
           $match: {
             parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
-            [position]: name
+            [position_category]: name
           }
         },
         {
@@ -689,7 +689,7 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
         {
           $match: {
             parsedDate: { $gte: new Date(`${endYear}-01-01`), $lte: endDate },
-            [position]: name
+            [position_category]: name
           }
         },
         {
@@ -716,7 +716,7 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
         {
           $match: {
             parsedDate: { $gte: new Date(`${endYear - 1}-01-01`), $lte: new Date(`${endYear - 1}-${endMonth}-${presentDayOfMonth}`) },
-            [position]: name
+            [position_category]: name
           }
         },
         {
