@@ -75,3 +75,22 @@ exports.addProduct = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+// Get product details by productId
+exports.getProductById = async (req, res) => {
+    try {
+        const { productId } = req.params;
+
+        // Find the product by ID
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        return res.status(200).json({ product });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
