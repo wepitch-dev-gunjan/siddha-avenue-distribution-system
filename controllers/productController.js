@@ -94,3 +94,41 @@ exports.getProductById = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+exports.getAllProducts = async (req, res) => {
+    try {
+        const { query } = req.query; // Get search query from request query string
+
+        // Log the query for debugging purposes
+        console.log("Search query:", query);
+
+        // If query is empty, return all live products
+        let products;
+        if (!query || query.trim() === "") {
+            products = await Product.find({ Status: 'live' });
+        } else {
+            // Convert query to lowercase
+            const lowerCaseQuery = query.toLowerCase();
+
+            // Find products that are "live" and match the search query in model, productCode, or category
+            products = await Product.find({
+                Status: 'live',
+                $or: [
+                    { Brand: { $regex: lowerCaseQuery, $options: 'i' } },
+                    { Model: { $regex: lowerCaseQuery, $options: 'i' } },
+                    { ProductCode: { $regex: lowerCaseQuery, $options: 'i' } },
+                    { Category: { $regex: lowerCaseQuery, $options: 'i' } }
+                ]
+            });
+        }
+
+        if (products.length === 0) {
+            return res.status(200).json({ message: 'No Matching Products Found' });
+        }
+
+        return res.status(200).json({ products });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
