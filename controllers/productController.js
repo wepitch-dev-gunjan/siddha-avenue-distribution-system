@@ -1,4 +1,6 @@
 const Product = require("../models/Product");
+const csvParser = require("csv-parser");
+const { Readable } = require("stream");
 
 // Segments
 const segments = [
@@ -7,6 +9,26 @@ const segments = [
 ];
 
 // Function to get segment based on price and category
+// function getSegmentByPrice(price, category) {
+//   if (category === 'tab') {
+//     return price > 40000 ? 'Tab>40k' : 'Tab<40k';
+//   } else if (category === 'wearable') {
+//     return 'Wearable';
+//   } else { // Default to smartphone segment logic
+//     if (price >= 100000) return "100K";
+//     if (price >= 70000 && price < 100000) return "70-100K";
+//     if (price >= 40000 && price < 70000) return "40-70K";
+//     if (price > 40000) return "> 40 K";
+//     if (price <= 40000) return "< 40 K";
+//     if (price >= 30000 && price < 40000) return "30-40K";
+//     if (price >= 20000 && price < 30000) return "20-30K";
+//     if (price >= 15000 && price < 20000) return "15-20K";
+//     if (price >= 10000 && price < 15000) return "10-15K";
+//     if (price >= 6000 && price < 10000) return "6-10K";
+//   }
+// }
+
+// Add Product API
 function getSegmentByPrice(price, category) {
   if (category === 'tab') {
     return price > 40000 ? 'Tab>40k' : 'Tab<40k';
@@ -14,19 +36,19 @@ function getSegmentByPrice(price, category) {
     return 'Wearable';
   } else { // Default to smartphone segment logic
     if (price >= 100000) return "100K";
-    if (price >= 70000 && price < 100000) return "70-100K";
-    if (price >= 40000 && price < 70000) return "40-70K";
-    if (price > 40000) return "> 40 K";
-    if (price <= 40000) return "< 40 K";
-    if (price >= 30000 && price < 40000) return "30-40K";
-    if (price >= 20000 && price < 30000) return "20-30K";
-    if (price >= 15000 && price < 20000) return "15-20K";
-    if (price >= 10000 && price < 15000) return "10-15K";
-    if (price >= 6000 && price < 10000) return "6-10K";
+    if (price >= 70000) return "70-100K";
+    if (price >= 40000) return "40-70K";
+    if (price > 40000) return "> 40 K"; // This line is redundant given the 40-70K check above, so it's unnecessary
+    if (price >= 30000) return "30-40K";
+    if (price >= 20000) return "20-30K";
+    if (price >= 15000) return "15-20K";
+    if (price >= 10000) return "10-15K";
+    if (price >= 6000) return "6-10K";
+    return "< 6K"; 
   }
 }
 
-// Add Product API
+
 exports.addProduct = async (req, res) => {
   try {
     const { Brand, Model, ProductCode, Price, Category, Status, Specs } = req.body;
@@ -76,7 +98,7 @@ exports.addProduct = async (req, res) => {
   }
 };
 
-// Get product details by productId
+
 exports.getProductById = async (req, res) => {
     try {
         const { productId } = req.params;
@@ -131,4 +153,96 @@ exports.getAllProducts = async (req, res) => {
         console.error(error);
         return res.status(500).json({ error: 'Internal Server Error' });
     }
+};
+
+// Function to generate a unique product code using Brand, Model, and current timestamp
+const generateProductCode = (brand, model) => {
+  const sanitizedBrand = brand.replace(/\s+/g, '-').toUpperCase();
+  const sanitizedModel = model.replace(/\s+/g, '-').toUpperCase();
+  const timestamp = Date.now(); // Use current timestamp for uniqueness
+  return `${sanitizedBrand}-${sanitizedModel}-${timestamp}`;
+};
+
+// API to upload CSV and add products
+exports.addProductsFromCSV = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).send("No file uploaded");
+    }
+
+    let results = [];
+
+    if (req.file.originalname.endsWith(".csv")) {
+      const stream = new Readable();
+      stream.push(req.file.buffer);
+      stream.push(null);
+
+      stream
+        .pipe(csvParser())
+        .on('data', (data) => {
+          results.push(data);
+        })
+        .on('end', async () => {
+          try {
+            let newEntries = [];
+
+            for (let data of results) {
+              let { Brand, Model, ProductCode, Price, Category, Status, Specs } = data;
+
+              if (!Brand || !Model || !Price || !Category) {
+                console.log(`Missing required fields for product: ${Model}`);
+                continue; // Skip rows with missing required fields
+              }
+
+              // Generate product code if missing
+              if (!ProductCode) {
+                ProductCode = generateProductCode(Brand, Model);
+                console.log(`Generated Product Code: ${ProductCode}`);
+              }
+
+              const iuid = Object.values(data).join('|');
+              console.log("IUID: ", iuid);
+
+              // Check if the product already exists based on ProductCode
+              const existingProduct = await Product.findOne({ ProductCode });
+              if (existingProduct) {
+                console.log(`Product with code ${ProductCode} already exists, skipping.`);
+                continue; // Skip existing products
+              }
+
+              const priceValue = parseFloat(Price);
+              const Segment = getSegmentByPrice(priceValue, Category);
+
+              const newProduct = {
+                Brand,
+                Model,
+                ProductCode,
+                Price: priceValue,
+                Segment,
+                Category,
+                Status: Status || 'draft',
+                Specs: Specs || '',
+              };
+
+              newEntries.push(newProduct);
+            }
+
+            if (newEntries.length > 0) {
+              await Product.insertMany(newEntries);
+              res.status(200).send("Products inserted into database");
+            } else {
+              res.status(200).send("No new data to insert, all entries already exist.");
+            }
+          } catch (error) {
+            console.error(error);
+            res.status(500).send("Error inserting products into the database");
+          }
+        });
+    } else {
+      res.status(400).send("Unsupported file format");
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal server error");
+  }
 };
