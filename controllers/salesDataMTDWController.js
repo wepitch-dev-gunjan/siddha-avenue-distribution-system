@@ -5221,17 +5221,34 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
 
     const { Name: name, Position: position } = employee;
 
-    // Call the getAllSubordinatesByCodeMTDW API
-    const subordinateRes = await axios.get(
-      `${BACKEND_URL}/sales-data-mtdw/get-all-subordinates-by-code-mtdw/${code}`
-    );
-    
-    // Extract the list of subordinates for the provided position category
-    const subordinates = subordinateRes.data[position_category] || [];
+    let buyerCodes = [];
+    try {
+      // Call the getAllSubordinatesByCodeMTDW API
+      const subordinateRes = await axios.get(
+        `${BACKEND_URL}/sales-data-mtdw/get-dealer-list-for-employees-by-code`, {
+          params: {
+            dealer_category: dealer_category,
+            code: code,
+            start_date: start_date,
+            end_date: end_date
+          }
+        }
+      );
+
+      // Extract the list of BUYER CODEs from the response
+      buyerCodes = subordinateRes.data.map(dealer => dealer["BUYER CODE"]);
+
+      if (!buyerCodes.length) {
+        return res.status(404).send({ message: "No dealers found with the specified criteria." });
+      }
+    } catch (err) {
+      console.error("Error fetching dealer list:", err.message || err);
+      return res.status(500).send({ error: "Failed to fetch dealer list. Please try again later." });
+    }
 
     // Default channels and columns
     const channels = [
-      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
+      "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"
     ];
 
     const defaultRow = {
@@ -5276,7 +5293,7 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
     // Fetch target values and volumes by channel
     const { targetValuesByChannel, targetVolumesByChannel } = await fetchTargetValuesAndVolumesByChannel(endDate, name, position);
 
-    // Modify the query to match only the subordinates in salesDataMTDW
+    // Modify the query to match only the dealers in salesDataMTDW
     let salesStatsQuery = [
       {
         $addFields: {
@@ -5293,7 +5310,7 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
         $match: {
           parsedDate: { $gte: startDate, $lte: endDate },
           "SALES TYPE": "Sell Out",
-          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+          "BUYER CODE": { $in: buyerCodes } // Match only the dealers in the sales data
         }
       },
       {
@@ -5329,7 +5346,7 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
         $match: {
           parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
           "SALES TYPE": "Sell Out",
-          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+          "BUYER CODE": { $in: buyerCodes } // Match only the dealers in the sales data
         }
       },
       {
@@ -5366,7 +5383,7 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
         $match: {
           parsedDate: endDate,
           "SALES TYPE": "Sell Out",
-          [position_category]: { $in: subordinates } // Match only the subordinates in the sales data
+          "BUYER CODE": { $in: buyerCodes } // Match only the dealers in the sales data
         }
       },
       {
@@ -5480,8 +5497,8 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
     // Send response with column names and report data
     res.status(200).json({ columns: columnNames, data: report });
   } catch (error) {
-    console.error(error);
-    return res.status(500).send("Internal Server Error");
+    console.error("Error processing request:", error.message || error);
+    return res.status(500).send({ error: "Internal Server Error" });
   }
 };
 
@@ -5863,91 +5880,6 @@ exports.getDealerListForEmployee = async (req, res) => {
   }
 };
 
-// exports.getDealerListForEmployeeByCode = async (req, res) => {
-//   try {
-//     let { start_date, end_date, data_format, dealer_category, code } = req.query;
-
-//     if (!code) {
-//       return res.status(400).send({ error: "Employee code is required!"});
-//     }
-
-//     const employeeCodeUpper = code.toUpperCase();
-
-//     console.log("CODE: ", employeeCodeUpper);
-
-//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
-
-//     if (!employee) {
-//       return res.status(400).send({ error: "Employee not found with this code!!" });
-//     }
-
-//     const { Name: name, Position: position } = employee;
-//     console.log("Name and Position: ", name, position)
-
-//     if (!data_format) data_format = 'value';
-
-//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-//     let endDate = end_date ? new Date(end_date) : new Date();
-
-//     const parseDate = (dateString) => {
-//       const [month, day, year] = dateString.split('/');
-//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
-//     };
-
-//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
-//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
-
-//     // Query for dealers list 
-//     const dealerListQuery = [
-//       {
-//         $addFields: {
-//           parsedDate: {
-//             $dateFromString: {
-//               dateString: "$DATE",
-//               format: "%m/%d/%Y",
-//               timezone: "UTC"
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $match: {
-//           parsedDate: { $gte: startDate, $lte: endDate },
-//           "SALES TYPE": "Sell Out",
-//           [position]: name  // Dynamically match the position field to the employee's name
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
-//           BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
-//         }
-//       },
-//       {
-//         $project: {
-//           _id: 0,  // Hide the MongoDB ID
-//           "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
-//           "BUYER": 1  // Include BUYER name in the result
-//         }
-//       }
-//     ];
-
-//     const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
-
-//     if (!dealers.length) {
-//       return res.status(404).send({ message: "No matching dealers found!" });
-//     }
-
-//     // Return the list of unique dealers with BUYER CODE and BUYER
-//     return res.status(200).send(dealers);
-
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).send("Internal Server Error");
-//   }
-// };
-
-
 exports.getDealerListForEmployeeByCode = async (req, res) => {
   try {
     let { start_date, end_date, data_format, dealer_category, code } = req.query;
@@ -6054,7 +5986,6 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
-
 
 
 // exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
