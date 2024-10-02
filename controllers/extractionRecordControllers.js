@@ -178,7 +178,7 @@ exports.getExtractionDataForEmployee = async (req, res) => {
         // Add the column names as the first entry in the array
         const columns = [
             'ID', 'Dealer Code', 'Shop Name', 'Date', 'Quantity', 'Uploaded By', 
-            'Employee Name', 'Total Price', 'Remarks', 'Brand', 'Model', 
+            'Employee Name', 'Total Price', 'Brand', 'Model', 
             'Dealer Price', 'Segment', 'Category', 'Status'
         ];
 
