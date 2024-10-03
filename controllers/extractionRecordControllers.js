@@ -6,57 +6,6 @@ const Dealer = require('../models/Dealer');
 
 const { BACKEND_URL } = process.env;
 
-// exports.addExtractionRecord = async (req, res) => {
-//     try {
-//         const { productId, dealerCode, quantity,  remarks } = req.body;
-
-//         // Extract code (employee code) directly from req
-//         const { code } = req;
-
-//         // Validate required fields
-//         if (!productId || !dealerCode || !quantity || !code) {
-//             return res.status(400).json({
-//                 error: 'Please provide all required fields: productId, dealerCode, quantity, modeOfPayment, and ensure the code is provided.'
-//             });
-//         }
-
-//         // Fetch the product details by calling the /product/by-id/:productId API
-//         const productResponse = await axios.get(`${BACKEND_URL}/product/by-id/${productId}`);
-        
-//         // Check if the product exists
-//         if (!productResponse.data.product) {
-//             return res.status(404).json({ error: 'Product not found' });
-//         }
-
-//         const product = productResponse.data.product;
-
-//         // Calculate the total price
-//         const totalPrice = product.Price * quantity;
-
-//         // Create a new record
-//         const newRecord = new ExtractionRecord({
-//             productId,
-//             dealerCode,
-//             date: new Date(), // Set the date as the current date
-//             quantity,
-//             uploadedBy: code, // Set the employee code from req
-//             totalPrice,
-//             remarks
-//         });
-
-//         // Save the record to the database
-//         await newRecord.save();
-
-//         return res.status(200).json({
-//             message: 'Extraction Record added successfully.',
-//             data: newRecord
-//         });
-//     } catch (error) {
-//         console.error(error);
-//         return res.status(500).json({ error: 'Internal Server Error' });
-//     }
-// };
-
 exports.addExtractionRecord = async (req, res) => {
     try {
         const { products, dealerCode, remarks } = req.body;
@@ -182,23 +131,30 @@ exports.getAllExtractionRecords = async (req, res) => {
             const dealer = await Dealer.findOne({ dealerCode: record.dealerCode }).select('shopName');
 
             return {
-                _id: record._id,
-                dealerCode: record.dealerCode,
-                shopName: dealer ? dealer.shopName : 'N/A', // Add shopName from dealer
-                date: formatDate(record.date), // Format the date here
-                quantity: record.quantity,
-                uploadedBy: record.uploadedBy,
-                employeeName: employee ? employee.Name : 'N/A', // Add employeeName from EmployeeCode
-                totalPrice: record.totalPrice,
-                remarks: record.remarks,
+                ID: record._id,
+                'Dealer Code': record.dealerCode,
+                'Shop Name': dealer ? dealer.shopName : 'N/A', // Add shopName from dealer
                 Brand: record.productId?.Brand,
                 Model: record.productId?.Model,
-                Price: record.productId?.Price,
-                Segment: record.productId?.Segment,
                 Category: record.productId?.Category,
-                Status: record.productId?.Status
+                Quantity: record.quantity,
+                Price: record.productId?.Price,
+                'Total Price': record.totalPrice,
+                Segment: record.productId?.Segment,
+                'Uploaded By': record.uploadedBy,
+                'Employee Name': employee ? employee.Name : 'N/A', // Add employeeName from EmployeeCode
+                Status: record.productId?.Status,
+                Date: formatDate(record.date) // Format the date here
             };
         }));
+
+        // Add the column names as the first entry in the array
+        const columns = {
+            columns: ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'Quantity', 'Dealer Price', 'Total Price', 'Segment', 'Uploaded By', 'Employee Name', 'Status', 'Date']
+        };
+
+        // Insert the columns at the beginning of the response array
+        recordsWithDetails.unshift(columns);
 
         return res.status(200).json({ records: recordsWithDetails });
     } catch (error) {
@@ -259,5 +215,90 @@ exports.getExtractionDataForEmployee = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+exports.getExtractionRecordsForAMonth = async (req, res) => {
+    try {
+        // Extract the month and year from the request query parameters (assume format YYYY-MM)
+        const { month, year } = req.query;
+
+        // Validate the month and year
+        if (!month || !year) {
+            return res.status(400).json({ error: 'Please provide both month and year.' });
+        }
+
+        // Calculate the start and end date for the given month
+        const startDate = new Date(year, month - 1, 1); // First day of the month
+        const endDate = new Date(year, month, 0); // Last day of the month
+
+        // Find extraction records within the specified month
+        const extractionRecords = await ExtractionRecord.find({
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        }).populate({
+            path: 'productId',
+            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+        });
+
+        // Check if any records were found
+        if (extractionRecords.length === 0) {
+            return res.status(200).json({ message: 'No records found for the given month.' });
+        }
+
+        // Aggregate the data by dealer, product, and employee (TSE)
+        const aggregatedData = {};
+
+        for (const record of extractionRecords) {
+            const dealerCode = record.dealerCode;
+            const productId = record.productId._id;
+            const uploadedBy = record.uploadedBy;
+
+            // Create a unique key for each dealer, product, and employee combination
+            const key = `${dealerCode}-${productId}-${uploadedBy}`;
+
+            // If the key doesn't exist, initialize the aggregated data
+            if (!aggregatedData[key]) {
+                const employee = await EmployeeCode.findOne({ Code: uploadedBy }).select('Name');
+                const dealer = await Dealer.findOne({ dealerCode }).select('shopName');
+
+                aggregatedData[key] = {
+                    ID: record._id,
+                    'Dealer Code': dealerCode,
+                    'Shop Name': dealer ? dealer.shopName : 'N/A',
+                    Brand: record.productId.Brand,
+                    Model: record.productId.Model,
+                    Category: record.productId.Category,
+                    'MTD Volume': 0, // Initialize the quantity
+                    'MTD Value': 0, // Initialize the total price
+                    Segment: record.productId.Segment,
+                    'TSE': employee ? employee.Name : 'N/A', // Employee name (TSE)
+                    'TSE Code': uploadedBy, // Uploaded by (TSE Code)
+                };
+            }
+
+            // Aggregate the quantity (MTD Volume) and total price (MTD Value)
+            aggregatedData[key]['MTD Volume'] += record.quantity;
+            aggregatedData[key]['MTD Value'] += record.totalPrice;
+        }
+
+        // Convert the aggregated data object to an array
+        const recordsWithDetails = Object.values(aggregatedData);
+
+        // Add the column names as the first entry in the array
+        const columns = {
+            columns: ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'MTD Volume', 'MTD Value', 'Segment', 'TSE', 'TSE Code']
+        };
+
+        // Insert the columns at the beginning of the response array
+        recordsWithDetails.unshift(columns);
+
+        return res.status(200).json({ records: recordsWithDetails });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 
 
