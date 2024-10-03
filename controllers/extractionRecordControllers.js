@@ -6,50 +6,130 @@ const Dealer = require('../models/Dealer');
 
 const { BACKEND_URL } = process.env;
 
+// exports.addExtractionRecord = async (req, res) => {
+//     try {
+//         const { productId, dealerCode, quantity,  remarks } = req.body;
+
+//         // Extract code (employee code) directly from req
+//         const { code } = req;
+
+//         // Validate required fields
+//         if (!productId || !dealerCode || !quantity || !code) {
+//             return res.status(400).json({
+//                 error: 'Please provide all required fields: productId, dealerCode, quantity, modeOfPayment, and ensure the code is provided.'
+//             });
+//         }
+
+//         // Fetch the product details by calling the /product/by-id/:productId API
+//         const productResponse = await axios.get(`${BACKEND_URL}/product/by-id/${productId}`);
+        
+//         // Check if the product exists
+//         if (!productResponse.data.product) {
+//             return res.status(404).json({ error: 'Product not found' });
+//         }
+
+//         const product = productResponse.data.product;
+
+//         // Calculate the total price
+//         const totalPrice = product.Price * quantity;
+
+//         // Create a new record
+//         const newRecord = new ExtractionRecord({
+//             productId,
+//             dealerCode,
+//             date: new Date(), // Set the date as the current date
+//             quantity,
+//             uploadedBy: code, // Set the employee code from req
+//             totalPrice,
+//             remarks
+//         });
+
+//         // Save the record to the database
+//         await newRecord.save();
+
+//         return res.status(200).json({
+//             message: 'Extraction Record added successfully.',
+//             data: newRecord
+//         });
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
+
 exports.addExtractionRecord = async (req, res) => {
     try {
-        const { productId, dealerCode, quantity,  remarks } = req.body;
+        const { products, dealerCode, remarks } = req.body;
 
         // Extract code (employee code) directly from req
         const { code } = req;
 
         // Validate required fields
-        if (!productId || !dealerCode || !quantity || !code) {
+        if (!products || !dealerCode || !code) {
             return res.status(400).json({
-                error: 'Please provide all required fields: productId, dealerCode, quantity, modeOfPayment, and ensure the code is provided.'
+                error: 'Please provide all required fields: products (array), dealerCode, and ensure the code is provided.'
             });
         }
 
-        // Fetch the product details by calling the /product/by-id/:productId API
-        const productResponse = await axios.get(`${BACKEND_URL}/product/by-id/${productId}`);
-        
-        // Check if the product exists
-        if (!productResponse.data.product) {
-            return res.status(404).json({ error: 'Product not found' });
+        if (!Array.isArray(products) || products.length === 0) {
+            return res.status(400).json({
+                error: 'The products field should be a non-empty array.'
+            });
         }
 
-        const product = productResponse.data.product;
+        let extractionRecords = [];
 
-        // Calculate the total price
-        const totalPrice = product.Price * quantity;
+        // Loop through each product and validate
+        for (const productData of products) {
+            const { productId, quantity } = productData;
 
-        // Create a new record
-        const newRecord = new ExtractionRecord({
-            productId,
-            dealerCode,
-            date: new Date(), // Set the date as the current date
-            quantity,
-            uploadedBy: code, // Set the employee code from req
-            totalPrice,
-            remarks
-        });
+            if (!productId || !quantity) {
+                return res.status(400).json({
+                    error: 'Each product must have productId and quantity.'
+                });
+            }
 
-        // Save the record to the database
-        await newRecord.save();
+            // Fetch the product details by calling the /product/by-id/:productId API
+            const productResponse = await axios.get(`${BACKEND_URL}/product/by-id/${productId}`);
+
+            // Check if the product exists
+            if (!productResponse.data.product) {
+                return res.status(404).json({ error: `Product not found with id: ${productId}` });
+            }
+
+            const product = productResponse.data.product;
+
+            // Calculate the total price
+            const totalPrice = product.Price * quantity;
+
+            // Create a new record for each product
+            const newRecord = new ExtractionRecord({
+                productId,
+                dealerCode,
+                date: new Date(), // Set the date as the current date
+                quantity,
+                uploadedBy: code, // Set the employee code from req
+                totalPrice,
+                remarks
+            });
+
+            // Save the record to the database
+            const savedRecord = await newRecord.save();
+            extractionRecords.push({
+                _id: savedRecord._id,
+                product: product, // Include the product details in the response
+                dealerCode: savedRecord.dealerCode,
+                date: savedRecord.date,
+                quantity: savedRecord.quantity,
+                uploadedBy: savedRecord.uploadedBy,
+                totalPrice: savedRecord.totalPrice,
+                remarks: savedRecord.remarks
+            });
+        }
 
         return res.status(200).json({
-            message: 'Extraction Record added successfully.',
-            data: newRecord
+            message: 'Extraction Records added successfully.',
+            products: extractionRecords
         });
     } catch (error) {
         console.error(error);
@@ -140,7 +220,7 @@ exports.getExtractionDataForEmployee = async (req, res) => {
         // Find extraction records that match the uploadedBy field with the code from the token
         const extractionRecords = await ExtractionRecord.find({ uploadedBy: code }).populate({
             path: 'productId',
-            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+            select: 'Brand Model Category' // Only select these fields from the Product model
         });
 
         // Check if any records were found
@@ -150,40 +230,28 @@ exports.getExtractionDataForEmployee = async (req, res) => {
 
         // Fetch employee name and dealer shop name
         const recordsWithDetails = await Promise.all(extractionRecords.map(async (record) => {
-            // Fetch the employee by code (uploadedBy)
-            const employee = await EmployeeCode.findOne({ Code: record.uploadedBy }).select('Name');
-
             // Fetch the dealer by dealerCode
             const dealer = await Dealer.findOne({ dealerCode: record.dealerCode }).select('shopName');
 
             return {
-                _id: record._id,
+                Id: record._id,
                 dealerCode: record.dealerCode,
                 shopName: dealer ? dealer.shopName : 'N/A', // Add shopName from dealer
-                date: formatDate(record.date), // Format the date here
-                quantity: record.quantity,
-                uploadedBy: record.uploadedBy,
-                employeeName: employee ? employee.Name : 'N/A', // Add employeeName from EmployeeCode
-                totalPrice: record.totalPrice,
-                remarks: record.remarks,
                 Brand: record.productId?.Brand,
                 Model: record.productId?.Model,
-                Price: record.productId?.Price,
-                Segment: record.productId?.Segment,
                 Category: record.productId?.Category,
-                Status: record.productId?.Status
+                quantity: record.quantity,
+                totalPrice: record.totalPrice
             };
         }));
 
         // Add the column names as the first entry in the array
-        const columns = [
-            'ID', 'Dealer Code', 'Shop Name', 'Date', 'Quantity', 'Uploaded By', 
-            'Employee Name', 'Total Price', 'Brand', 'Model', 
-            'Dealer Price', 'Segment', 'Category', 'Status'
-        ];
+        const columns = {
+            columns: ['Id', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'Quantity', 'Total Price']
+        };
 
-        // Insert the columns at the beginning of the response array
-        recordsWithDetails.unshift({ columns });
+        // Insert the column names at the beginning of the response array
+        recordsWithDetails.unshift(columns);
 
         return res.status(200).json({ records: recordsWithDetails });
     } catch (error) {
@@ -191,3 +259,5 @@ exports.getExtractionDataForEmployee = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+
