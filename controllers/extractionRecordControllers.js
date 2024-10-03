@@ -300,5 +300,108 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
     }
 };
 
+exports.getExtractionReportForAdmins = async (req, res) => {
+    try {
+        // Extract the month and year from the request query parameters (assume format YYYY-MM)
+        const { month, year } = req.query;
+
+        // Validate the month and year
+        if (!month || !year) {
+            return res.status(400).json({ error: 'Please provide both month and year.' });
+        }
+
+        // Calculate the start and end date for the given month
+        const startDate = new Date(year, month - 1, 1); // First day of the month
+        const endDate = new Date(year, month, 0); // Last day of the month
+
+        // Fetch all dealers from the database
+        const allDealers = await Dealer.find().select('dealerCode shopName');
+
+        // Fetch extraction records within the specified date range
+        const extractionRecords = await ExtractionRecord.find({
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        }).populate({
+            path: 'productId',
+            select: 'Brand Model Price Segment Category Status'
+        });
+
+        // Check if any extraction records were found
+        if (extractionRecords.length === 0) {
+            return res.status(200).json({ message: 'No extraction records found for the given month.' });
+        }
+
+        // Prepare the report by aggregating data for each dealer
+        const reportData = {};
+
+        // Initialize the report for each dealer
+        allDealers.forEach((dealer) => {
+            reportData[dealer.dealerCode] = {
+                'Dealer Code': dealer.dealerCode,
+                'Dealer Name': dealer.shopName,
+                'MTD Volume': 0,
+                'MTD Value': 0,
+                Brands: {} // Store brand-wise aggregation here
+            };
+        });
+
+        // Process each extraction record and aggregate by dealer and brand
+        for (const record of extractionRecords) {
+            const dealerCode = record.dealerCode;
+
+            // If the dealer exists in our reportData, aggregate the data
+            if (reportData[dealerCode]) {
+                // Update MTD Volume and MTD Value
+                reportData[dealerCode]['MTD Volume'] += record.quantity;
+                reportData[dealerCode]['MTD Value'] += record.totalPrice;
+
+                const brand = record.productId.Brand;
+                if (!reportData[dealerCode].Brands[brand]) {
+                    // Initialize the brand if not already present
+                    reportData[dealerCode].Brands[brand] = {
+                        'MTD Volume': 0,
+                        'MTD Value': 0
+                    };
+                }
+                // Aggregate MTD Volume and MTD Value for the specific brand
+                reportData[dealerCode].Brands[brand]['MTD Volume'] += record.quantity;
+                reportData[dealerCode].Brands[brand]['MTD Value'] += record.totalPrice;
+            }
+        }
+
+        // Convert the aggregated report data into an array
+        const recordsWithDetails = Object.values(reportData).map(dealer => {
+            const brandDetails = Object.entries(dealer.Brands).map(([brand, data]) => ({
+                Brand: brand,
+                'Brand MTD Volume': data['MTD Volume'],
+                'Brand MTD Value': data['MTD Value']
+            }));
+
+            return {
+                ...dealer,
+                Brands: brandDetails
+            };
+        });
+
+        // Add the column names as the first entry in the array
+        const columns = {
+            columns: ['Dealer Code', 'Dealer Name', 'MTD Volume', 'MTD Value', 'Brand', 'Brand MTD Volume', 'Brand MTD Value']
+        };
+
+        // Insert the columns at the beginning of the response array
+        recordsWithDetails.unshift(columns);
+
+        return res.status(200).json({ records: recordsWithDetails });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+
+
+
 
 
