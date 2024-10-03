@@ -310,6 +310,9 @@ exports.getExtractionReportForAdmins = async (req, res) => {
             return res.status(400).json({ error: 'Please provide both month and year.' });
         }
 
+        // List of brands to analyze
+        const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
+
         // Calculate the start and end date for the given month
         const startDate = new Date(year, month - 1, 1); // First day of the month
         const endDate = new Date(year, month, 0); // Last day of the month
@@ -317,7 +320,7 @@ exports.getExtractionReportForAdmins = async (req, res) => {
         // Fetch all dealers from the database
         const allDealers = await Dealer.find().select('dealerCode shopName');
 
-        // Fetch extraction records within the specified date range
+        // Find extraction records within the specified month
         const extractionRecords = await ExtractionRecord.find({
             date: {
                 $gte: startDate,
@@ -325,69 +328,95 @@ exports.getExtractionReportForAdmins = async (req, res) => {
             }
         }).populate({
             path: 'productId',
-            select: 'Brand Model Price Segment Category Status'
+            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
         });
 
-        // Check if any extraction records were found
-        if (extractionRecords.length === 0) {
-            return res.status(200).json({ message: 'No extraction records found for the given month.' });
-        }
+        // Create a map for aggregation by dealer and TSE
+        const aggregatedData = {};
 
-        // Prepare the report by aggregating data for each dealer
-        const reportData = {};
-
-        // Initialize the report for each dealer
-        allDealers.forEach((dealer) => {
-            reportData[dealer.dealerCode] = {
-                'Dealer Code': dealer.dealerCode,
-                'Dealer Name': dealer.shopName,
-                'MTD Volume': 0,
-                'MTD Value': 0,
-                Brands: {} // Store brand-wise aggregation here
-            };
-        });
-
-        // Process each extraction record and aggregate by dealer and brand
+        // Iterate through extraction records and aggregate data
         for (const record of extractionRecords) {
             const dealerCode = record.dealerCode;
+            const uploadedBy = record.uploadedBy;
+            const brand = record.productId.Brand;
 
-            // If the dealer exists in our reportData, aggregate the data
-            if (reportData[dealerCode]) {
-                // Update MTD Volume and MTD Value
-                reportData[dealerCode]['MTD Volume'] += record.quantity;
-                reportData[dealerCode]['MTD Value'] += record.totalPrice;
+            // If the brand is not in the target list, continue to the next record
+            if (!brands.includes(brand)) continue;
 
-                const brand = record.productId.Brand;
-                if (!reportData[dealerCode].Brands[brand]) {
-                    // Initialize the brand if not already present
-                    reportData[dealerCode].Brands[brand] = {
-                        'MTD Volume': 0,
-                        'MTD Value': 0
-                    };
-                }
-                // Aggregate MTD Volume and MTD Value for the specific brand
-                reportData[dealerCode].Brands[brand]['MTD Volume'] += record.quantity;
-                reportData[dealerCode].Brands[brand]['MTD Value'] += record.totalPrice;
+            // Create a unique key for each dealer and employee (TSE)
+            const key = `${dealerCode}-${uploadedBy}`;
+
+            // Initialize the aggregated data if not existing
+            if (!aggregatedData[key]) {
+                const employee = await EmployeeCode.findOne({ Code: uploadedBy }).select('Name');
+
+                // Initialize the record for all brands with default values set to 0
+                aggregatedData[key] = {
+                    'Dealer Code': dealerCode,
+                    'Shop Name': record.shopName,
+                    'TSE': employee ? employee.Name : 'N/A', // Employee name (TSE)
+                    'TSE Code': uploadedBy, // Uploaded by (TSE Code),
+                    Brands: {
+                        Samsung: 0,
+                        Apple: 0,
+                        Oppo: 0,
+                        Vivo: 0,
+                        OnePlus: 0,
+                        Realme: 0,
+                        Sony: 0,
+                        Motorola: 0,
+                        Nothing: 0,
+                        Google: 0
+                    },
+                    'Total Volume': 0, // Total quantity for the dealer and TSE
+                    'Total Value': 0 // Total price for the dealer and TSE
+                };
             }
+
+            // Add the quantity and total price to the specific brand
+            aggregatedData[key].Brands[brand] += record.quantity;
+            aggregatedData[key]['Total Volume'] += record.quantity;
+            aggregatedData[key]['Total Value'] += record.totalPrice;
         }
 
-        // Convert the aggregated report data into an array
-        const recordsWithDetails = Object.values(reportData).map(dealer => {
-            const brandDetails = Object.entries(dealer.Brands).map(([brand, data]) => ({
-                Brand: brand,
-                'Brand MTD Volume': data['MTD Volume'],
-                'Brand MTD Value': data['MTD Value']
-            }));
+        // Map aggregated data to all dealers, setting default values for missing data
+        const recordsWithDetails = allDealers.map((dealer) => {
+            // Check if this dealer has any data, otherwise set default values
+            const dealerEntries = Object.values(aggregatedData).filter(entry => entry['Dealer Code'] === dealer.dealerCode);
 
-            return {
-                ...dealer,
-                Brands: brandDetails
-            };
+            if (dealerEntries.length > 0) {
+                return dealerEntries;
+            } else {
+                // If no entries exist for the dealer, create a default entry with 0 values
+                return {
+                    'Dealer Code': dealer.dealerCode,
+                    'Shop Name': dealer.shopName,
+                    'TSE': 'N/A', // No TSE data available
+                    'TSE Code': 'N/A', // No TSE code available
+                    Brands: {
+                        Samsung: 0,
+                        Apple: 0,
+                        Oppo: 0,
+                        Vivo: 0,
+                        OnePlus: 0,
+                        Realme: 0,
+                        Sony: 0,
+                        Motorola: 0,
+                        Nothing: 0,
+                        Google: 0
+                    },
+                    'Total Volume': 0,
+                    'Total Value': 0
+                };
+            }
         });
 
         // Add the column names as the first entry in the array
         const columns = {
-            columns: ['Dealer Code', 'Dealer Name', 'MTD Volume', 'MTD Value', 'Brand', 'Brand MTD Volume', 'Brand MTD Value']
+            columns: [
+                'Dealer Code', 'Shop Name', 'TSE', 'TSE Code', 'Samsung', 'Apple', 'Oppo', 'Vivo',
+                'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google', 'Total Volume', 'Total Value'
+            ]
         };
 
         // Insert the columns at the beginning of the response array
@@ -399,7 +428,6 @@ exports.getExtractionReportForAdmins = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
-
 
 
 
