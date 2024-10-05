@@ -7,6 +7,7 @@ const { fetchTargetValuesAndVolumesByChannel, fetchTargetValuesAndVolumes } = re
 const EmployeeCode = require("../models/EmployeeCode");
 const Dealer = require("../models/Dealer");
 const axios = require('axios');
+const DealerListTseWise = require("../models/DealerListTseWise");
 const { BACKEND_URL } = process.env;
 
 exports.uploadSalesDataMTDW = async (req, res) => {
@@ -5883,10 +5884,12 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
 exports.getDealerListForEmployee = async (req, res) => {
   try {
     let { code } = req; 
+    let { name } = req;
     let { start_date, end_date, data_format, dealer_category } = req.query;
 
+    console.log("Name: ", name);
     if (!code) {
-      return res.status(400).send({ error: "Employee code is required!"});
+      return res.status(400).send({ error: "Employee code is required!" });
     }
 
     const employeeCodeUpper = code.toUpperCase();
@@ -5898,7 +5901,7 @@ exports.getDealerListForEmployee = async (req, res) => {
       return res.status(400).send({ error: "Employee not found with this code!!" });
     }
 
-    const { Name: name, Position: position } = employee;
+    const { Position: position } = employee;
     console.log("Name and Position: ", name, position);
 
     if (!data_format) data_format = 'value';
@@ -5915,12 +5918,26 @@ exports.getDealerListForEmployee = async (req, res) => {
     startDate = parseDate(startDate.toLocaleDateString('en-US'));
     endDate = parseDate(endDate.toLocaleDateString('en-US'));
 
-    // Query for dealers list (removed date filtering)
+    // Fetch dealer codes based on TSE name from DealerListTseWise model
+    const dealerListTseWiseQuery = {
+      TSE: name  // Match TSE field to the provided employee name
+    };
+
+    const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1 });
+
+    if (!dealerListTseWise.length) {
+      return res.status(404).send({ message: "No matching dealers found!" });
+    }
+
+    // Extract the dealer codes from the result
+    const dealerCodes = dealerListTseWise.map(dealer => dealer["Dealer Code"]);
+
+    // Query for matching dealers in the SalesDataMTDW model
     const dealerListQuery = [
       {
         $match: {
           "SALES TYPE": "Sell Out",
-          [position]: name  // Dynamically match the position field to the employee's name
+          "BUYER CODE": { $in: dealerCodes }  // Match dealer codes from the TSE wise dealer list
         }
       },
       {
@@ -5950,9 +5967,6 @@ exports.getDealerListForEmployee = async (req, res) => {
     }
 
     // If dealer_category is "NPO" or "KRO", filter dealers based on the category
-    const dealerCodes = dealers.map(d => d['BUYER CODE']);
-
-    // Fetch dealer information from the Dealer model based on the provided dealer codes
     const filteredDealers = await Dealer.find({
       dealerCode: { $in: dealerCodes },
       dealerCategory: dealer_category  // Match the dealer category
@@ -5976,6 +5990,103 @@ exports.getDealerListForEmployee = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
+
+// exports.getDealerListForEmployee = async (req, res) => {
+//   try {
+//     let { code } = req; 
+//     let { start_date, end_date, data_format, dealer_category } = req.query;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required!"});
+//     }
+
+//     const employeeCodeUpper = code.toUpperCase();
+//     console.log("CODE: ", employeeCodeUpper);
+
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+//     if (!employee) {
+//       return res.status(400).send({ error: "Employee not found with this code!!" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+//     console.log("Name and Position: ", name, position);
+
+//     if (!data_format) data_format = 'value';
+
+//     // Still receiving the dates from the user, but we won't use them in the query
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     // Query for dealers list (removed date filtering)
+//     const dealerListQuery = [
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           [position]: name  // Dynamically match the position field to the employee's name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
+//           BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,  // Hide the MongoDB ID
+//           "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
+//           "BUYER": 1  // Include BUYER name in the result
+//         }
+//       }
+//     ];
+
+//     const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+
+//     if (!dealers.length) {
+//       return res.status(404).send({ message: "No matching dealers found!" });
+//     }
+
+//     // If dealer_category is "ALL" or not provided, return all dealers
+//     if (!dealer_category || dealer_category === "ALL") {
+//       return res.status(200).send(dealers);
+//     }
+
+//     // If dealer_category is "NPO" or "KRO", filter dealers based on the category
+//     const dealerCodes = dealers.map(d => d['BUYER CODE']);
+
+//     // Fetch dealer information from the Dealer model based on the provided dealer codes
+//     const filteredDealers = await Dealer.find({
+//       dealerCode: { $in: dealerCodes },
+//       dealerCategory: dealer_category  // Match the dealer category
+//     });
+
+//     // Filter dealers that are in the selected category
+//     const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+
+//     // Update the dealers array to only include those in the selected category
+//     const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
+
+//     if (!filteredResult.length) {
+//       return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
+//     }
+
+//     // Return the filtered result
+//     return res.status(200).send(filteredResult);
+
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
 
 exports.getDealerListForEmployeeByCode = async (req, res) => {
   try {
