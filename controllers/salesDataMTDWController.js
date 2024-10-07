@@ -5773,6 +5773,137 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
   }
 };
 
+exports.getDealerListForEmployee = async (req, res) => {
+  try {
+    let { code } = req; 
+    let { name } = req;
+    let { start_date, end_date, data_format, dealer_category } = req.query;
+
+    console.log("Name: ", name);
+    if (!code) {
+      return res.status(400).send({ error: "Employee code is required!" });
+    }
+
+    const employeeCodeUpper = code.toUpperCase();
+    console.log("CODE: ", employeeCodeUpper);
+
+    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+    if (!employee) {
+      return res.status(400).send({ error: "Employee not found with this code!!" });
+    }
+
+    const { Position: position } = employee;
+    console.log("Name and Position: ", name, position);
+
+    if (!data_format) data_format = 'value';
+
+    // Still receiving the dates from the user, but we won't use them in the query
+    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let endDate = end_date ? new Date(end_date) : new Date();
+
+    const parseDate = (dateString) => {
+      const [month, day, year] = dateString.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+    };
+
+    startDate = parseDate(startDate.toLocaleDateString('en-US'));
+    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+    // Fetch dealer codes based on TSE name from DealerListTseWise model
+    const dealerListTseWiseQuery = {
+      TSE: name  // Match TSE field to the provided employee name
+    };
+
+    const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1 });
+
+    if (!dealerListTseWise.length) {
+      return res.status(404).send({ message: "No matching dealers found!" });
+    }
+
+    // Extract the dealer codes from the result
+    const dealerCodes = dealerListTseWise.map(dealer => dealer["Dealer Code"]);
+
+    // Query for matching dealers in the SalesDataMTDW model
+    const dealerListQuery = [
+      {
+        $match: {
+          "SALES TYPE": "Sell Out",
+          "BUYER CODE": { $in: dealerCodes }  // Match dealer codes from the TSE wise dealer list
+        }
+      },
+      {
+        $group: {
+          _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
+          BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
+        }
+      },
+      {
+        $project: {
+          _id: 0,  // Hide the MongoDB ID
+          "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
+          "BUYER": 1  // Include BUYER name in the result
+        }
+      }
+    ];
+
+    const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+
+    if (!dealers.length) {
+      return res.status(404).send({ message: "No matching dealers found!" });
+    }
+
+    // If dealer_category is "ALL" or not provided, return all dealers
+    if (!dealer_category || dealer_category === "ALL") {
+      // Fetch DEALER NAME from Dealer model for each dealer
+      const dealerDetails = await Dealer.find({ dealerCode: { $in: dealerCodes } }, { dealerCode: 1, dealerName: 1 });
+
+      // Map DEALER NAME to the dealers found in SalesDataMTDW
+      const dealersWithNames = dealers.map(dealer => {
+        const matchedDealer = dealerDetails.find(d => d.dealerCode === dealer["BUYER CODE"]);
+        return {
+          ...dealer,
+          "DEALER NAME": matchedDealer ? matchedDealer.dealerName : "Unknown Dealer Name"
+        };
+      });
+
+      return res.status(200).send(dealersWithNames);
+    }
+
+    // If dealer_category is "NPO" or "KRO", filter dealers based on the category
+    const filteredDealers = await Dealer.find({
+      dealerCode: { $in: dealerCodes },
+      dealerCategory: dealer_category  // Match the dealer category
+    });
+
+    // Filter dealers that are in the selected category
+    const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+
+    // Update the dealers array to only include those in the selected category
+    const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
+
+    // Add DEALER NAME from Dealer model for each dealer in the filtered result
+    const filteredResultWithNames = filteredResult.map(dealer => {
+      const matchedDealer = filteredDealers.find(d => d.dealerCode === dealer["BUYER CODE"]);
+      return {
+        ...dealer,
+        "DEALER NAME": matchedDealer ? matchedDealer.dealerName : "Unknown Dealer Name"
+      };
+    });
+
+    if (!filteredResultWithNames.length) {
+      return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
+    }
+
+    // Return the filtered result with DEALER NAME
+    return res.status(200).send(filteredResultWithNames);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
 // exports.getDealerListForEmployee = async (req, res) => {
 //   try {
 //     let { code } = req; 
@@ -5881,115 +6012,115 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
 //   }
 // };
 
-exports.getDealerListForEmployee = async (req, res) => {
-  try {
-    let { code } = req; 
-    let { name } = req;
-    let { start_date, end_date, data_format, dealer_category } = req.query;
+// exports.getDealerListForEmployee = async (req, res) => {
+//   try {
+//     let { code } = req; 
+//     let { name } = req;
+//     let { start_date, end_date, data_format, dealer_category } = req.query;
 
-    console.log("Name: ", name);
-    if (!code) {
-      return res.status(400).send({ error: "Employee code is required!" });
-    }
+//     console.log("Name: ", name);
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required!" });
+//     }
 
-    const employeeCodeUpper = code.toUpperCase();
-    console.log("CODE: ", employeeCodeUpper);
+//     const employeeCodeUpper = code.toUpperCase();
+//     console.log("CODE: ", employeeCodeUpper);
 
-    const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
 
-    if (!employee) {
-      return res.status(400).send({ error: "Employee not found with this code!!" });
-    }
+//     if (!employee) {
+//       return res.status(400).send({ error: "Employee not found with this code!!" });
+//     }
 
-    const { Position: position } = employee;
-    console.log("Name and Position: ", name, position);
+//     const { Position: position } = employee;
+//     console.log("Name and Position: ", name, position);
 
-    if (!data_format) data_format = 'value';
+//     if (!data_format) data_format = 'value';
 
-    // Still receiving the dates from the user, but we won't use them in the query
-    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    let endDate = end_date ? new Date(end_date) : new Date();
+//     // Still receiving the dates from the user, but we won't use them in the query
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
 
-    const parseDate = (dateString) => {
-      const [month, day, year] = dateString.split('/');
-      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
-    };
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
 
-    startDate = parseDate(startDate.toLocaleDateString('en-US'));
-    endDate = parseDate(endDate.toLocaleDateString('en-US'));
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
 
-    // Fetch dealer codes based on TSE name from DealerListTseWise model
-    const dealerListTseWiseQuery = {
-      TSE: name  // Match TSE field to the provided employee name
-    };
+//     // Fetch dealer codes based on TSE name from DealerListTseWise model
+//     const dealerListTseWiseQuery = {
+//       TSE: name  // Match TSE field to the provided employee name
+//     };
 
-    const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1 });
+//     const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1 });
 
-    if (!dealerListTseWise.length) {
-      return res.status(404).send({ message: "No matching dealers found!" });
-    }
+//     if (!dealerListTseWise.length) {
+//       return res.status(404).send({ message: "No matching dealers found!" });
+//     }
 
-    // Extract the dealer codes from the result
-    const dealerCodes = dealerListTseWise.map(dealer => dealer["Dealer Code"]);
+//     // Extract the dealer codes from the result
+//     const dealerCodes = dealerListTseWise.map(dealer => dealer["Dealer Code"]);
 
-    // Query for matching dealers in the SalesDataMTDW model
-    const dealerListQuery = [
-      {
-        $match: {
-          "SALES TYPE": "Sell Out",
-          "BUYER CODE": { $in: dealerCodes }  // Match dealer codes from the TSE wise dealer list
-        }
-      },
-      {
-        $group: {
-          _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
-          BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
-        }
-      },
-      {
-        $project: {
-          _id: 0,  // Hide the MongoDB ID
-          "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
-          "BUYER": 1  // Include BUYER name in the result
-        }
-      }
-    ];
+//     // Query for matching dealers in the SalesDataMTDW model
+//     const dealerListQuery = [
+//       {
+//         $match: {
+//           "SALES TYPE": "Sell Out",
+//           "BUYER CODE": { $in: dealerCodes }  // Match dealer codes from the TSE wise dealer list
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$BUYER CODE",  // Group by BUYER CODE to ensure uniqueness
+//           BUYER: { $first: "$BUYER" },  // Take the first BUYER name for each BUYER CODE
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,  // Hide the MongoDB ID
+//           "BUYER CODE": "$_id",  // Rename _id back to BUYER CODE
+//           "BUYER": 1  // Include BUYER name in the result
+//         }
+//       }
+//     ];
 
-    const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+//     const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
 
-    if (!dealers.length) {
-      return res.status(404).send({ message: "No matching dealers found!" });
-    }
+//     if (!dealers.length) {
+//       return res.status(404).send({ message: "No matching dealers found!" });
+//     }
 
-    // If dealer_category is "ALL" or not provided, return all dealers
-    if (!dealer_category || dealer_category === "ALL") {
-      return res.status(200).send(dealers);
-    }
+//     // If dealer_category is "ALL" or not provided, return all dealers
+//     if (!dealer_category || dealer_category === "ALL") {
+//       return res.status(200).send(dealers);
+//     }
 
-    // If dealer_category is "NPO" or "KRO", filter dealers based on the category
-    const filteredDealers = await Dealer.find({
-      dealerCode: { $in: dealerCodes },
-      dealerCategory: dealer_category  // Match the dealer category
-    });
+//     // If dealer_category is "NPO" or "KRO", filter dealers based on the category
+//     const filteredDealers = await Dealer.find({
+//       dealerCode: { $in: dealerCodes },
+//       dealerCategory: dealer_category  // Match the dealer category
+//     });
 
-    // Filter dealers that are in the selected category
-    const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+//     // Filter dealers that are in the selected category
+//     const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
 
-    // Update the dealers array to only include those in the selected category
-    const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
+//     // Update the dealers array to only include those in the selected category
+//     const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
 
-    if (!filteredResult.length) {
-      return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
-    }
+//     if (!filteredResult.length) {
+//       return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
+//     }
 
-    // Return the filtered result
-    return res.status(200).send(filteredResult);
+//     // Return the filtered result
+//     return res.status(200).send(filteredResult);
 
-  } catch (error) {
-    console.error(error);
-    return res.status(500).send("Internal Server Error");
-  }
-};
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
 
 // exports.getDealerListForEmployee = async (req, res) => {
 //   try {
