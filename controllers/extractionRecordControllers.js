@@ -376,7 +376,14 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
         let csvContent = columns.join(',') + '\n'; // Add the header row
 
         recordsWithDetails.forEach(record => {
-            const row = columns.map(column => record[column]); // Extract values based on column names
+            // Remove commas from numeric values
+            const formattedRecord = {
+                ...record,
+                'MTD Value': record['MTD Value'].toString().replace(/,/g, ''), // Remove commas from 'MTD Value'
+                'MTD Volume': record['MTD Volume'].toString().replace(/,/g, '') // Remove commas from 'MTD Volume' if needed
+            };
+
+            const row = columns.map(column => formattedRecord[column]); // Extract values based on column names
             csvContent += row.join(',') + '\n'; // Add each row to the CSV content
         });
 
@@ -392,6 +399,7 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
 
 exports.getExtractionReportForAdmins = async (req, res) => {
     try {
