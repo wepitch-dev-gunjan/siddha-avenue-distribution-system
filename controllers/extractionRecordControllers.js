@@ -372,19 +372,21 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
         // Define the columns for the CSV
         const columns = ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'MTD Volume', 'MTD Value', 'Segment', 'TSE', 'TSE Code'];
 
+        // Function to sanitize data (remove commas)
+        const sanitizeValue = (value) => {
+            if (typeof value === 'string') {
+                return value.replace(/,/g, ''); // Remove all commas from string values
+            }
+            return value.toString().replace(/,/g, ''); // Convert numbers to string and remove commas
+        };
+
         // Build the CSV content as a string
         let csvContent = columns.join(',') + '\n'; // Add the header row
 
         recordsWithDetails.forEach(record => {
-            // Remove commas from numeric values
-            const formattedRecord = {
-                ...record,
-                'MTD Value': record['MTD Value'].toString().replace(/,/g, ''), // Remove commas from 'MTD Value'
-                'MTD Volume': record['MTD Volume'].toString().replace(/,/g, '') // Remove commas from 'MTD Volume' if needed
-            };
-
-            const row = columns.map(column => formattedRecord[column]); // Extract values based on column names
-            csvContent += row.join(',') + '\n'; // Add each row to the CSV content
+            // Sanitize each value in the record
+            const sanitizedRecord = columns.map(column => sanitizeValue(record[column]));
+            csvContent += sanitizedRecord.join(',') + '\n'; // Add each sanitized row to the CSV content
         });
 
         // Set the response headers for file download
@@ -399,6 +401,107 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+
+// exports.getExtractionRecordsForAMonth = async (req, res) => {
+//     try {
+//         // Extract the month and year from the request query parameters (assume format YYYY-MM)
+//         const { month, year } = req.query;
+
+//         // Validate the month and year
+//         if (!month || !year) {
+//             return res.status(400).json({ error: 'Please provide both month and year.' });
+//         }
+
+//         // Calculate the start and end date for the given month
+//         const startDate = new Date(year, month - 1, 1); // First day of the month
+//         const endDate = new Date(year, month, 0); // Last day of the month
+
+//         // Find extraction records within the specified month
+//         const extractionRecords = await ExtractionRecord.find({
+//             date: {
+//                 $gte: startDate,
+//                 $lte: endDate
+//             }
+//         }).populate({
+//             path: 'productId',
+//             select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+//         });
+
+//         // Check if any records were found
+//         if (extractionRecords.length === 0) {
+//             return res.status(200).json({ message: 'No records found for the given month.' });
+//         }
+
+//         // Aggregate the data by dealer, product, and employee (TSE)
+//         const aggregatedData = {};
+
+//         for (const record of extractionRecords) {
+//             const dealerCode = record.dealerCode;
+//             const productId = record.productId._id;
+//             const uploadedBy = record.uploadedBy;
+
+//             // Create a unique key for each dealer, product, and employee combination
+//             const key = `${dealerCode}-${productId}-${uploadedBy}`;
+
+//             // If the key doesn't exist, initialize the aggregated data
+//             if (!aggregatedData[key]) {
+//                 const employee = await EmployeeCode.findOne({ Code: uploadedBy }).select('Name');
+//                 const dealer = await Dealer.findOne({ dealerCode }).select('shopName');
+
+//                 aggregatedData[key] = {
+//                     ID: record._id,
+//                     'Dealer Code': dealerCode,
+//                     'Shop Name': dealer ? dealer.shopName : 'N/A',
+//                     Brand: record.productId.Brand,
+//                     Model: record.productId.Model,
+//                     Category: record.productId.Category,
+//                     'MTD Volume': 0, // Initialize the quantity
+//                     'MTD Value': 0, // Initialize the total price
+//                     Segment: record.productId.Segment,
+//                     'TSE': employee ? employee.Name : 'N/A', // Employee name (TSE)
+//                     'TSE Code': uploadedBy // Uploaded by (TSE Code)
+//                 };
+//             }
+
+//             // Aggregate the quantity (MTD Volume) and total price (MTD Value)
+//             aggregatedData[key]['MTD Volume'] += record.quantity;
+//             aggregatedData[key]['MTD Value'] += record.totalPrice;
+//         }
+
+//         // Convert the aggregated data object to an array
+//         const recordsWithDetails = Object.values(aggregatedData);
+
+//         // Define the columns for the CSV
+//         const columns = ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'MTD Volume', 'MTD Value', 'Segment', 'TSE', 'TSE Code'];
+
+//         // Build the CSV content as a string
+//         let csvContent = columns.join(',') + '\n'; // Add the header row
+
+//         recordsWithDetails.forEach(record => {
+//             // Remove commas from numeric values
+//             const formattedRecord = {
+//                 ...record,
+//                 'MTD Value': record['MTD Value'].toString().replace(/,/g, ''), // Remove commas from 'MTD Value'
+//                 'MTD Volume': record['MTD Volume'].toString().replace(/,/g, '') // Remove commas from 'MTD Volume' if needed
+//             };
+
+//             const row = columns.map(column => formattedRecord[column]); // Extract values based on column names
+//             csvContent += row.join(',') + '\n'; // Add each row to the CSV content
+//         });
+
+//         // Set the response headers for file download
+//         res.header('Content-Type', 'text/csv');
+//         res.header('Content-Disposition', 'attachment; filename="extraction_records.csv"');
+
+//         // Send the CSV content as response
+//         return res.status(200).send(csvContent);
+
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 
 exports.getExtractionReportForAdmins = async (req, res) => {
