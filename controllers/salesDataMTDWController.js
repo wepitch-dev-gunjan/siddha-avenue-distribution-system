@@ -5815,7 +5815,7 @@ exports.getDealerListForEmployee = async (req, res) => {
       TSE: name  // Match TSE field to the provided employee name
     };
 
-    const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1 });
+    const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1, "DEALER NAME": 1 });
 
     if (!dealerListTseWise.length) {
       return res.status(404).send({ message: "No matching dealers found!" });
@@ -5847,62 +5847,59 @@ exports.getDealerListForEmployee = async (req, res) => {
       }
     ];
 
-    const dealers = await SalesDataMTDW.aggregate(dealerListQuery);
+    const dealersInSalesData = await SalesDataMTDW.aggregate(dealerListQuery);
 
-    if (!dealers.length) {
-      return res.status(404).send({ message: "No matching dealers found!" });
-    }
+    // Map the dealers from SalesDataMTDW into a dictionary for quick lookup
+    const salesDataMap = dealersInSalesData.reduce((map, dealer) => {
+      map[dealer["BUYER CODE"]] = dealer;
+      return map;
+    }, {});
+
+    // Merge the data from SalesDataMTDW with DealerListTseWise to include all dealers
+    const completeDealerList = dealerListTseWise.map(dealer => {
+      const dealerCode = dealer["Dealer Code"];
+      // If the dealer code is found in SalesDataMTDW, use that information, otherwise fallback to DealerListTseWise
+      if (salesDataMap[dealerCode]) {
+        return {
+          "BUYER CODE": dealerCode,
+          BUYER: salesDataMap[dealerCode].BUYER  // Use BUYER from SalesDataMTDW
+        };
+      } else {
+        return {
+          "BUYER CODE": dealerCode,
+          BUYER: dealer["DEALER NAME"]  // Use DEALER NAME from DealerListTseWise if not found in SalesDataMTDW
+        };
+      }
+    });
 
     // If dealer_category is "ALL" or not provided, return all dealers
     if (!dealer_category || dealer_category === "ALL") {
-      // Fetch DEALER NAME from Dealer model for each dealer
-      const dealerDetails = await Dealer.find({ dealerCode: { $in: dealerCodes } }, { dealerCode: 1, dealerName: 1 });
-
-      // Map DEALER NAME to the dealers found in SalesDataMTDW
-      const dealersWithNames = dealers.map(dealer => {
-        const matchedDealer = dealerDetails.find(d => d.dealerCode === dealer["BUYER CODE"]);
-        return {
-          ...dealer,
-          "DEALER NAME": matchedDealer ? matchedDealer.dealerName : "Unknown Dealer Name"
-        };
-      });
-
-      return res.status(200).send(dealersWithNames);
+      return res.status(200).send(completeDealerList);
     }
 
     // If dealer_category is "NPO" or "KRO", filter dealers based on the category
-    const filteredDealers = await Dealer.find({
-      dealerCode: { $in: dealerCodes },
-      dealerCategory: dealer_category  // Match the dealer category
-    });
+    const filteredDealerCodes = dealerListTseWise
+      .filter(dealer => dealer.dealerCategory === dealer_category)
+      .map(d => d["Dealer Code"]);
 
-    // Filter dealers that are in the selected category
-    const filteredDealerCodes = filteredDealers.map(d => d.dealerCode);
+    // Update the completeDealerList array to only include those in the selected category
+    const filteredResult = completeDealerList.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
 
-    // Update the dealers array to only include those in the selected category
-    const filteredResult = dealers.filter(dealer => filteredDealerCodes.includes(dealer['BUYER CODE']));
-
-    // Add DEALER NAME from Dealer model for each dealer in the filtered result
-    const filteredResultWithNames = filteredResult.map(dealer => {
-      const matchedDealer = filteredDealers.find(d => d.dealerCode === dealer["BUYER CODE"]);
-      return {
-        ...dealer,
-        "DEALER NAME": matchedDealer ? matchedDealer.dealerName : "Unknown Dealer Name"
-      };
-    });
-
-    if (!filteredResultWithNames.length) {
+    if (!filteredResult.length) {
       return res.status(404).send({ message: `No dealers found in the ${dealer_category} category.` });
     }
 
-    // Return the filtered result with DEALER NAME
-    return res.status(200).send(filteredResultWithNames);
+    // Return the filtered result with the updated BUYER names
+    return res.status(200).send(filteredResult);
 
   } catch (error) {
     console.error(error);
     return res.status(500).send("Internal Server Error");
   }
 };
+
+
+
 
 // exports.getDealerListForEmployee = async (req, res) => {
 //   try {
