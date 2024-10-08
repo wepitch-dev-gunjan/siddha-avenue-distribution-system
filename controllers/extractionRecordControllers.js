@@ -402,6 +402,400 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
     }
 };
 
+exports.getExtractionReportForAdmins = async (req, res) => {
+    try {
+        const { month, year } = req.query;
+
+        if (!month || !year) {
+            return res.status(400).json({ error: 'Please provide both month and year.' });
+        }
+
+        // Calculate the start and end date for the given month
+        const startDate = new Date(year, month - 1, 1); // First day of the month
+        const endDate = new Date(year, month, 0); // Last day of the month
+
+        // Fetch the extraction records directly using the logic from getExtractionRecordsForAMonth
+        const extractionRecords = await ExtractionRecord.find({
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        }).populate({
+            path: 'productId',
+            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+        });
+
+        if (!extractionRecords || extractionRecords.length === 0) {
+            return res.status(200).json({ message: 'No records found for the given month.' });
+        }
+
+        // Initialize the report structure with placeholders
+        const report = {
+            year,
+            overallValues: [],
+            brandSegments: [],
+            priceRanges: {
+                "40K+": { total: 0 },
+                "30-40K": { total: 0 },
+                "20-30K": { total: 0 },
+                "15-20K": { total: 0 },
+                "10-15K": { total: 0 },
+                "<10K": { total: 0 },
+            },
+        };
+
+        const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
+
+        brands.forEach((brand) => {
+            report.brandSegments.push({
+                brand,
+                overallValue: 0,
+                sharePercentage: 0,
+                segments: {
+                    "40K+": { value: 0, share: 0 },
+                    "30-40K": { value: 0, share: 0 },
+                    "20-30K": { value: 0, share: 0 },
+                    "15-20K": { value: 0, share: 0 },
+                    "10-15K": { value: 0, share: 0 },
+                    "<10K": { value: 0, share: 0 },
+                }
+            });
+        });
+
+        // Fetch all dealers to include in the report
+        const allDealers = await Dealer.find().select('dealerCode shopName'); 
+        const aggregatedDealers = {};
+
+        // Initialize each dealer with zero values
+        allDealers.forEach(dealer => {
+            aggregatedDealers[dealer.dealerCode] = {
+                'Dealer Code': dealer.dealerCode,
+                'Shop Name': dealer.shopName,
+                values: {},
+                total: 0,
+            };
+
+            brands.forEach((brand) => {
+                aggregatedDealers[dealer.dealerCode].values[brand] = {
+                    overallValue: 0,
+                    segments: {
+                        "40K+": 0,
+                        "30-40K": 0,
+                        "20-30K": 0,
+                        "15-20K": 0,
+                        "10-15K": 0,
+                        "<10K": 0,
+                    }
+                };
+            });
+        });
+
+        for (const record of extractionRecords) {
+            const { Brand: brand, Segment: segment, dealerCode, quantity, totalPrice } = record;
+
+            // Only process if the brand is in our list and dealer exists
+            if (brands.includes(brand) && aggregatedDealers[dealerCode]) {
+                const dealerData = aggregatedDealers[dealerCode];
+                dealerData.values[brand].overallValue += totalPrice;
+
+                // Aggregate by segment if it's valid
+                if (report.priceRanges[segment]) {
+                    dealerData.values[brand].segments[segment] += totalPrice;
+                    report.priceRanges[segment].total += totalPrice;
+                }
+
+                dealerData.total += totalPrice;
+            }
+        }
+
+        report.brandSegments.forEach((brandData) => {
+            brandData.overallValue = Object.values(aggregatedDealers).reduce((acc, dealer) => acc + dealer.values[brandData.brand].overallValue, 0);
+
+            const overallValue = report.overallValues.reduce((acc, val) => acc + val, 0);
+            if (overallValue > 0) {
+                brandData.sharePercentage = (brandData.overallValue / overallValue) * 100;
+            }
+
+            Object.keys(brandData.segments).forEach((segment) => {
+                const totalSegmentValue = report.priceRanges[segment].total;
+                if (totalSegmentValue > 0) {
+                    brandData.segments[segment].share = (brandData.segments[segment].value / totalSegmentValue) * 100;
+                }
+            });
+        });
+
+        const formattedReport = {
+            year: report.year,
+            overallValues: report.overallValues,
+            brands: report.brandSegments.map((brand) => ({
+                name: brand.brand,
+                overallValue: brand.overallValue,
+                sharePercentage: brand.sharePercentage,
+                segments: brand.segments,
+            })),
+            priceRanges: report.priceRanges,
+            dealers: Object.values(aggregatedDealers),
+        };
+
+        return res.status(200).json(formattedReport);
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+
+
+// exports.getExtractionReportForAdmins = async (req, res) => {
+//     try {
+//         // Extract the month and year from the request query parameters (assume format YYYY-MM)
+//         const { month, year } = req.query;
+
+//         // Validate the month and year
+//         if (!month || !year) {
+//             return res.status(400).json({ error: 'Please provide both month and year.' });
+//         }
+//         console.log("Month n year: ", month, year);
+
+//         // Fetch data from the /record/extraction/for-a-month API
+//         const apiUrl = `${BACKEND_URL}/record/extraction/for-a-month?month=${month}&year=${year}`;
+//         const response = await axios.get(apiUrl);
+
+//         // Ensure we have a valid response and extract the records
+//         const records = response.data.records;
+
+//         if (!records || records.length === 0) {
+//             return res.status(200).json({ message: 'No records found for the given month.' });
+//         }
+
+//         // Initialize the report structure
+//         const report = {
+//             year,
+//             overallValues: [],
+//             brandSegments: [],
+//             priceRanges: {
+//                 "40K+": {},
+//                 "30-40K": {},
+//                 "20-30K": {},
+//                 "15-20K": {},
+//                 "10-15K": {},
+//                 "<10K": {},
+//                 // Add more price ranges as needed
+//             },
+//         };
+
+//         // List of brands to analyze
+//         const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
+
+//         // Initialize brand and segment data
+//         brands.forEach((brand) => {
+//             report.brandSegments.push({
+//                 brand,
+//                 overallValue: 0,
+//                 sharePercentage: 0,
+//                 segments: {
+//                     "40K+": { value: 0, share: 0 },
+//                     "30-40K": { value: 0, share: 0 },
+//                     "20-30K": { value: 0, share: 0 },
+//                     "15-20K": { value: 0, share: 0 },
+//                     "10-15K": { value: 0, share: 0 },
+//                     "<10K": { value: 0, share: 0 },
+//                 }
+//             });
+//         });
+
+//         // Aggregate and compute the report
+//         records.forEach((record) => {
+//             const { Brand: brand, 'MTD Value': value, Segment: segment } = record;
+
+//             // Only process if the brand is in our list
+//             if (brands.includes(brand)) {
+//                 // Find the brand segment in the report structure
+//                 const brandData = report.brandSegments.find(b => b.brand === brand);
+
+//                 // Update overall value for the brand
+//                 brandData.overallValue += value;
+
+//                 // Aggregate by segment
+//                 if (report.priceRanges[segment]) {
+//                     brandData.segments[segment].value += value;
+//                 }
+
+//                 // Also, update the overall totals per segment
+//                 if (!report.priceRanges[segment].total) {
+//                     report.priceRanges[segment].total = 0;
+//                 }
+//                 report.priceRanges[segment].total += value;
+//             }
+//         });
+
+//         // Calculate share percentages for each brand and segment
+//         report.brandSegments.forEach((brandData) => {
+//             const overallValue = report.overallValues.reduce((acc, val) => acc + val, 0);
+//             if (overallValue > 0) {
+//                 brandData.sharePercentage = (brandData.overallValue / overallValue) * 100;
+//             }
+
+//             Object.keys(brandData.segments).forEach((segment) => {
+//                 if (report.priceRanges[segment] && report.priceRanges[segment].total > 0) {
+//                     brandData.segments[segment].share = (brandData.segments[segment].value / report.priceRanges[segment].total) * 100;
+//                 }
+//             });
+//         });
+
+//         // Format the report response
+//         const formattedReport = {
+//             year: report.year,
+//             overallValues: report.overallValues,
+//             brands: report.brandSegments.map((brand) => ({
+//                 name: brand.brand,
+//                 overallValue: brand.overallValue,
+//                 sharePercentage: brand.sharePercentage,
+//                 segments: brand.segments,
+//             })),
+//             priceRanges: report.priceRanges,
+//         };
+
+//         // Return the formatted report
+//         return res.status(200).json(formattedReport);
+
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
+
+
+
+// exports.getExtractionReportForAdmins = async (req, res) => {
+//     try {
+//         // Extract the month and year from the request query parameters (assume format YYYY-MM)
+//         const { month, year } = req.query;
+
+//         // Validate the month and year
+//         if (!month || !year) {
+//             return res.status(400).json({ error: 'Please provide both month and year.' });
+//         }
+
+//         // List of brands to analyze
+//         const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
+
+//         // Calculate the start and end date for the given month
+//         const startDate = new Date(year, month - 1, 1); // First day of the month
+//         const endDate = new Date(year, month, 0); // Last day of the month
+
+//         // Fetch all dealers from the database
+//         const allDealers = await Dealer.find().select('dealerCode shopName');
+
+//         // Find extraction records within the specified month
+//         const extractionRecords = await ExtractionRecord.find({
+//             date: {
+//                 $gte: startDate,
+//                 $lte: endDate
+//             }
+//         }).populate({
+//             path: 'productId',
+//             select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+//         });
+
+//         // Create a map for aggregation by dealer and TSE
+//         const aggregatedData = {};
+
+//         // Iterate through extraction records and aggregate data
+//         for (const record of extractionRecords) {
+//             const dealerCode = record.dealerCode;
+//             const uploadedBy = record.uploadedBy;
+//             const brand = record.productId.Brand;
+
+//             // If the brand is not in the target list, continue to the next record
+//             if (!brands.includes(brand)) continue;
+
+//             // Create a unique key for each dealer and employee (TSE)
+//             const key = `${dealerCode}-${uploadedBy}`;
+
+//             // Initialize the aggregated data if not existing
+//             if (!aggregatedData[key]) {
+//                 const employee = await EmployeeCode.findOne({ Code: uploadedBy }).select('Name');
+
+//                 // Initialize the record for all brands with default values set to 0
+//                 aggregatedData[key] = {
+//                     'Dealer Code': dealerCode,
+//                     'Shop Name': record.shopName,
+//                     'TSE': employee ? employee.Name : 'N/A', // Employee name (TSE)
+//                     'TSE Code': uploadedBy, // Uploaded by (TSE Code),
+//                     Brands: {
+//                         Samsung: 0,
+//                         Apple: 0,
+//                         Oppo: 0,
+//                         Vivo: 0,
+//                         OnePlus: 0,
+//                         Realme: 0,
+//                         Sony: 0,
+//                         Motorola: 0,
+//                         Nothing: 0,
+//                         Google: 0
+//                     },
+//                     'Total Volume': 0, // Total quantity for the dealer and TSE
+//                     'Total Value': 0 // Total price for the dealer and TSE
+//                 };
+//             }
+
+//             // Add the quantity and total price to the specific brand
+//             aggregatedData[key].Brands[brand] += record.quantity;
+//             aggregatedData[key]['Total Volume'] += record.quantity;
+//             aggregatedData[key]['Total Value'] += record.totalPrice;
+//         }
+
+//         // Map aggregated data to all dealers, setting default values for missing data
+//         const recordsWithDetails = allDealers.map((dealer) => {
+//             // Check if this dealer has any data, otherwise set default values
+//             const dealerEntries = Object.values(aggregatedData).filter(entry => entry['Dealer Code'] === dealer.dealerCode);
+
+//             if (dealerEntries.length > 0) {
+//                 return dealerEntries;
+//             } else {
+//                 // If no entries exist for the dealer, create a default entry with 0 values
+//                 return {
+//                     'Dealer Code': dealer.dealerCode,
+//                     'Shop Name': dealer.shopName,
+//                     'TSE': 'N/A', // No TSE data available
+//                     'TSE Code': 'N/A', // No TSE code available
+//                     Brands: {
+//                         Samsung: 0,
+//                         Apple: 0,
+//                         Oppo: 0,
+//                         Vivo: 0,
+//                         OnePlus: 0,
+//                         Realme: 0,
+//                         Sony: 0,
+//                         Motorola: 0,
+//                         Nothing: 0,
+//                         Google: 0
+//                     },
+//                     'Total Volume': 0,
+//                     'Total Value': 0
+//                 };
+//             }
+//         });
+
+//         // Add the column names as the first entry in the array
+//         const columns = {
+//             columns: [
+//                 'Dealer Code', 'Shop Name', 'TSE', 'TSE Code', 'Samsung', 'Apple', 'Oppo', 'Vivo',
+//                 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google', 'Total Volume', 'Total Value'
+//             ]
+//         };
+
+//         // Insert the columns at the beginning of the response array
+//         recordsWithDetails.unshift(columns);
+
+//         return res.status(200).json({ records: recordsWithDetails });
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 // exports.getExtractionRecordsForAMonth = async (req, res) => {
 //     try {
@@ -502,136 +896,6 @@ exports.getExtractionRecordsForAMonth = async (req, res) => {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
-
-exports.getExtractionReportForAdmins = async (req, res) => {
-    try {
-        // Extract the month and year from the request query parameters (assume format YYYY-MM)
-        const { month, year } = req.query;
-
-        // Validate the month and year
-        if (!month || !year) {
-            return res.status(400).json({ error: 'Please provide both month and year.' });
-        }
-
-        // List of brands to analyze
-        const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
-
-        // Calculate the start and end date for the given month
-        const startDate = new Date(year, month - 1, 1); // First day of the month
-        const endDate = new Date(year, month, 0); // Last day of the month
-
-        // Fetch all dealers from the database
-        const allDealers = await Dealer.find().select('dealerCode shopName');
-
-        // Find extraction records within the specified month
-        const extractionRecords = await ExtractionRecord.find({
-            date: {
-                $gte: startDate,
-                $lte: endDate
-            }
-        }).populate({
-            path: 'productId',
-            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
-        });
-
-        // Create a map for aggregation by dealer and TSE
-        const aggregatedData = {};
-
-        // Iterate through extraction records and aggregate data
-        for (const record of extractionRecords) {
-            const dealerCode = record.dealerCode;
-            const uploadedBy = record.uploadedBy;
-            const brand = record.productId.Brand;
-
-            // If the brand is not in the target list, continue to the next record
-            if (!brands.includes(brand)) continue;
-
-            // Create a unique key for each dealer and employee (TSE)
-            const key = `${dealerCode}-${uploadedBy}`;
-
-            // Initialize the aggregated data if not existing
-            if (!aggregatedData[key]) {
-                const employee = await EmployeeCode.findOne({ Code: uploadedBy }).select('Name');
-
-                // Initialize the record for all brands with default values set to 0
-                aggregatedData[key] = {
-                    'Dealer Code': dealerCode,
-                    'Shop Name': record.shopName,
-                    'TSE': employee ? employee.Name : 'N/A', // Employee name (TSE)
-                    'TSE Code': uploadedBy, // Uploaded by (TSE Code),
-                    Brands: {
-                        Samsung: 0,
-                        Apple: 0,
-                        Oppo: 0,
-                        Vivo: 0,
-                        OnePlus: 0,
-                        Realme: 0,
-                        Sony: 0,
-                        Motorola: 0,
-                        Nothing: 0,
-                        Google: 0
-                    },
-                    'Total Volume': 0, // Total quantity for the dealer and TSE
-                    'Total Value': 0 // Total price for the dealer and TSE
-                };
-            }
-
-            // Add the quantity and total price to the specific brand
-            aggregatedData[key].Brands[brand] += record.quantity;
-            aggregatedData[key]['Total Volume'] += record.quantity;
-            aggregatedData[key]['Total Value'] += record.totalPrice;
-        }
-
-        // Map aggregated data to all dealers, setting default values for missing data
-        const recordsWithDetails = allDealers.map((dealer) => {
-            // Check if this dealer has any data, otherwise set default values
-            const dealerEntries = Object.values(aggregatedData).filter(entry => entry['Dealer Code'] === dealer.dealerCode);
-
-            if (dealerEntries.length > 0) {
-                return dealerEntries;
-            } else {
-                // If no entries exist for the dealer, create a default entry with 0 values
-                return {
-                    'Dealer Code': dealer.dealerCode,
-                    'Shop Name': dealer.shopName,
-                    'TSE': 'N/A', // No TSE data available
-                    'TSE Code': 'N/A', // No TSE code available
-                    Brands: {
-                        Samsung: 0,
-                        Apple: 0,
-                        Oppo: 0,
-                        Vivo: 0,
-                        OnePlus: 0,
-                        Realme: 0,
-                        Sony: 0,
-                        Motorola: 0,
-                        Nothing: 0,
-                        Google: 0
-                    },
-                    'Total Volume': 0,
-                    'Total Value': 0
-                };
-            }
-        });
-
-        // Add the column names as the first entry in the array
-        const columns = {
-            columns: [
-                'Dealer Code', 'Shop Name', 'TSE', 'TSE Code', 'Samsung', 'Apple', 'Oppo', 'Vivo',
-                'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google', 'Total Volume', 'Total Value'
-            ]
-        };
-
-        // Insert the columns at the beginning of the response array
-        recordsWithDetails.unshift(columns);
-
-        return res.status(200).json({ records: recordsWithDetails });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: 'Internal Server Error' });
-    }
-};
 
 
 
