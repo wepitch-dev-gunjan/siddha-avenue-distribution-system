@@ -422,13 +422,14 @@ exports.getExtractionReportForAdmins = async (req, res) => {
             }
         }).populate({
             path: 'productId',
-            select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+            select: 'Brand Model Price Category Status' // Only select these fields from the Product model
         });
 
         if (!extractionRecords || extractionRecords.length === 0) {
             return res.status(200).json({ message: 'No records found for the given month.' });
         }
 
+        
         // Initialize the report structure with placeholders
         const report = {
             year,
@@ -472,12 +473,14 @@ exports.getExtractionReportForAdmins = async (req, res) => {
                 'Dealer Code': dealer.dealerCode,
                 'Shop Name': dealer.shopName,
                 values: {},
-                total: 0,
+                total: 0, // Total worth of goods sold by the dealer
+                overallValue: 0, // Placeholder for the overall value of goods sold by the dealer
             };
 
             brands.forEach((brand) => {
                 aggregatedDealers[dealer.dealerCode].values[brand] = {
                     overallValue: 0,
+                    sharePercentage: 0,
                     segments: {
                         "40K+": 0,
                         "30-40K": 0,
@@ -490,43 +493,83 @@ exports.getExtractionReportForAdmins = async (req, res) => {
             });
         });
 
-        for (const record of extractionRecords) {
-            const { Brand: brand, Segment: segment, dealerCode, quantity, totalPrice } = record;
+        // Function to determine the segment based on product price (totalPrice / quantity)
+        const determineSegment = (pricePerUnit) => {
+            if (pricePerUnit >= 40000) return "40K+";
+            if (pricePerUnit >= 30000) return "30-40K";
+            if (pricePerUnit >= 20000) return "20-30K";
+            if (pricePerUnit >= 15000) return "15-20K";
+            if (pricePerUnit >= 10000) return "10-15K";
+            return "<10K";
+        };
 
-            // Only process if the brand is in our list and dealer exists
+        // Aggregate the totalPrice from each record and update brand and segment values per dealer
+        for (const record of extractionRecords) {
+            const { productId, dealerCode, totalPrice, quantity } = record;
+            const brand = productId.Brand;
+
+            // Calculate the price per unit (totalPrice / quantity)
+            const pricePerUnit = totalPrice / quantity;
+            const segment = determineSegment(pricePerUnit);
+
+            // Only process if the brand is in our list and the dealer exists
             if (brands.includes(brand) && aggregatedDealers[dealerCode]) {
                 const dealerData = aggregatedDealers[dealerCode];
-                dealerData.values[brand].overallValue += totalPrice;
+                const brandData = dealerData.values[brand];
 
-                // Aggregate by segment if it's valid
+                // Update the total sales value for this brand at this dealer
+                brandData.overallValue += totalPrice;
+
+                // Aggregate by the dynamically determined segment
                 if (report.priceRanges[segment]) {
-                    dealerData.values[brand].segments[segment] += totalPrice;
+                    brandData.segments[segment] += totalPrice;
                     report.priceRanges[segment].total += totalPrice;
                 }
 
+                // Update the total sales value for the dealer
                 dealerData.total += totalPrice;
             }
         }
 
-        report.brandSegments.forEach((brandData) => {
-            brandData.overallValue = Object.values(aggregatedDealers).reduce((acc, dealer) => acc + dealer.values[brandData.brand].overallValue, 0);
+        // Calculate the share percentage for each brand within each dealer and overallValue for the dealer
+        Object.values(aggregatedDealers).forEach(dealer => {
+            let dealerTotalValue = 0;
 
-            const overallValue = report.overallValues.reduce((acc, val) => acc + val, 0);
-            if (overallValue > 0) {
-                brandData.sharePercentage = (brandData.overallValue / overallValue) * 100;
-            }
+            // Iterate through each brand in the dealer's data
+            Object.keys(dealer.values).forEach(brand => {
+                const brandData = dealer.values[brand];
 
-            Object.keys(brandData.segments).forEach((segment) => {
-                const totalSegmentValue = report.priceRanges[segment].total;
-                if (totalSegmentValue > 0) {
-                    brandData.segments[segment].share = (brandData.segments[segment].value / totalSegmentValue) * 100;
+                // Add to dealer's overall value
+                dealerTotalValue += brandData.overallValue;
+
+                // Calculate the share percentage of the brand in the dealer's total sales
+                if (dealer.total > 0) {
+                    brandData.sharePercentage = (brandData.overallValue / dealer.total) * 100;
                 }
             });
+
+            // Set the dealer's overall value
+            dealer.overallValue = dealerTotalValue;
+        });
+
+        // Format the dealers with the aggregated data
+        const formattedDealers = Object.values(aggregatedDealers).map(dealer => {
+            return {
+                dealerCode: dealer['Dealer Code'],
+                shopName: dealer['Shop Name'],
+                overallValue: dealer.overallValue, // Total worth of goods sold by the dealer
+                brands: Object.keys(dealer.values).map(brand => ({
+                    name: brand,
+                    overallValue: dealer.values[brand].overallValue,
+                    sharePercentage: dealer.values[brand].sharePercentage,
+                    segments: dealer.values[brand].segments
+                }))
+            };
         });
 
         const formattedReport = {
             year: report.year,
-            overallValues: report.overallValues,
+            overallValues: report.brandSegments.map(brand => brand.overallValue),
             brands: report.brandSegments.map((brand) => ({
                 name: brand.brand,
                 overallValue: brand.overallValue,
@@ -534,7 +577,7 @@ exports.getExtractionReportForAdmins = async (req, res) => {
                 segments: brand.segments,
             })),
             priceRanges: report.priceRanges,
-            dealers: Object.values(aggregatedDealers),
+            dealers: formattedDealers,
         };
 
         return res.status(200).json(formattedReport);
@@ -544,6 +587,158 @@ exports.getExtractionReportForAdmins = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+
+
+
+
+
+
+
+// exports.getExtractionReportForAdmins = async (req, res) => {
+//     try {
+//         const { month, year } = req.query;
+
+//         if (!month || !year) {
+//             return res.status(400).json({ error: 'Please provide both month and year.' });
+//         }
+
+//         // Calculate the start and end date for the given month
+//         const startDate = new Date(year, month - 1, 1); // First day of the month
+//         const endDate = new Date(year, month, 0); // Last day of the month
+
+//         // Fetch the extraction records directly using the logic from getExtractionRecordsForAMonth
+//         const extractionRecords = await ExtractionRecord.find({
+//             date: {
+//                 $gte: startDate,
+//                 $lte: endDate
+//             }
+//         }).populate({
+//             path: 'productId',
+//             select: 'Brand Model Price Segment Category Status' // Only select these fields from the Product model
+//         });
+
+//         if (!extractionRecords || extractionRecords.length === 0) {
+//             return res.status(200).json({ message: 'No records found for the given month.' });
+//         }
+
+//         console.log("Extraction records: ", extractionRecords);
+
+//         // Initialize the report structure with placeholders
+//         const report = {
+//             year,
+//             overallValues: [],
+//             brandSegments: [],
+//             priceRanges: {
+//                 "40K+": { total: 0 },
+//                 "30-40K": { total: 0 },
+//                 "20-30K": { total: 0 },
+//                 "15-20K": { total: 0 },
+//                 "10-15K": { total: 0 },
+//                 "<10K": { total: 0 },
+//             },
+//         };
+
+//         const brands = ['Samsung', 'Apple', 'Oppo', 'Vivo', 'OnePlus', 'Realme', 'Sony', 'Motorola', 'Nothing', 'Google'];
+
+//         brands.forEach((brand) => {
+//             report.brandSegments.push({
+//                 brand,
+//                 overallValue: 0,
+//                 sharePercentage: 0,
+//                 segments: {
+//                     "40K+": { value: 0, share: 0 },
+//                     "30-40K": { value: 0, share: 0 },
+//                     "20-30K": { value: 0, share: 0 },
+//                     "15-20K": { value: 0, share: 0 },
+//                     "10-15K": { value: 0, share: 0 },
+//                     "<10K": { value: 0, share: 0 },
+//                 }
+//             });
+//         });
+
+//         // Fetch all dealers to include in the report
+//         const allDealers = await Dealer.find().select('dealerCode shopName'); 
+//         const aggregatedDealers = {};
+
+//         // Initialize each dealer with zero values
+//         allDealers.forEach(dealer => {
+//             aggregatedDealers[dealer.dealerCode] = {
+//                 'Dealer Code': dealer.dealerCode,
+//                 'Shop Name': dealer.shopName,
+//                 values: {},
+//                 total: 0,
+//             };
+
+//             brands.forEach((brand) => {
+//                 aggregatedDealers[dealer.dealerCode].values[brand] = {
+//                     overallValue: 0,
+//                     segments: {
+//                         "40K+": 0,
+//                         "30-40K": 0,
+//                         "20-30K": 0,
+//                         "15-20K": 0,
+//                         "10-15K": 0,
+//                         "<10K": 0,
+//                     }
+//                 };
+//             });
+//         });
+
+//         for (const record of extractionRecords) {
+//             const { Brand: brand, Segment: segment, dealerCode, quantity, totalPrice } = record;
+
+//             // Only process if the brand is in our list and dealer exists
+//             if (brands.includes(brand) && aggregatedDealers[dealerCode]) {
+//                 const dealerData = aggregatedDealers[dealerCode];
+//                 dealerData.values[brand].overallValue += totalPrice;
+
+//                 // Aggregate by segment if it's valid
+//                 if (report.priceRanges[segment]) {
+//                     dealerData.values[brand].segments[segment] += totalPrice;
+//                     report.priceRanges[segment].total += totalPrice;
+//                 }
+
+//                 dealerData.total += totalPrice;
+//             }
+//         }
+
+//         report.brandSegments.forEach((brandData) => {
+//             brandData.overallValue = Object.values(aggregatedDealers).reduce((acc, dealer) => acc + dealer.values[brandData.brand].overallValue, 0);
+
+//             const overallValue = report.overallValues.reduce((acc, val) => acc + val, 0);
+//             if (overallValue > 0) {
+//                 brandData.sharePercentage = (brandData.overallValue / overallValue) * 100;
+//             }
+
+//             Object.keys(brandData.segments).forEach((segment) => {
+//                 const totalSegmentValue = report.priceRanges[segment].total;
+//                 if (totalSegmentValue > 0) {
+//                     brandData.segments[segment].share = (brandData.segments[segment].value / totalSegmentValue) * 100;
+//                 }
+//             });
+//         });
+
+//         const formattedReport = {
+//             year: report.year,
+//             overallValues: report.overallValues,
+//             brands: report.brandSegments.map((brand) => ({
+//                 name: brand.brand,
+//                 overallValue: brand.overallValue,
+//                 sharePercentage: brand.sharePercentage,
+//                 segments: brand.segments,
+//             })),
+//             priceRanges: report.priceRanges,
+//             dealers: Object.values(aggregatedDealers),
+//         };
+
+//         return res.status(200).json(formattedReport);
+
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 
 
