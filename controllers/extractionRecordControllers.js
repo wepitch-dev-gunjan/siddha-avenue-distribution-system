@@ -3,6 +3,7 @@ const ExtractionRecord = require('../models/ExtractionRecord');
 const { formatDate } = require('../helpers/extracttionHelpers');
 const EmployeeCode = require('../models/EmployeeCode');
 const Dealer = require('../models/Dealer');
+const Product = require("../models/Product");
 
 const { BACKEND_URL } = process.env;
 
@@ -773,64 +774,44 @@ exports.getUniqueColumnValues = async (req, res) => {
             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
         }
 
-        // Fetch unique values from the specified column
-        const uniqueValues = await ExtractionRecord.distinct(column);exports.getExtractionDataForAdminWithFilters = async (req, res) => {
-            try {
-                const { startDate, endDate, brand, priceRange, dealerCode } = req.query;
-        
-                // Validate that startDate and endDate are provided and in correct format
-                if (!startDate || !endDate) {
-                    return res.status(400).json({ error: 'Please provide both start date and end date.' });
-                }
-        
-                // Convert startDate and endDate to JavaScript Date objects
-                const parsedStartDate = new Date(startDate);
-                const parsedEndDate = new Date(endDate);
-        
-                // Ensure that startDate is before or equal to endDate
-                if (parsedStartDate > parsedEndDate) {
-                    return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
-                }
-        
-                // Build the filter object dynamically based on the query parameters
-                const filter = {
-                    date: {
-                        $gte: parsedStartDate,
-                        $lte: parsedEndDate
+        let uniqueValues;
+
+        // Check if the requested column is part of the Product model
+        if (column.startsWith('productId.')) {
+            // This means we're querying a field from the Product model, so we need to populate productId
+
+            // Use MongoDB aggregation to get distinct values from the populated productId fields
+            const aggregationResult = await ExtractionRecord.aggregate([
+                {
+                    $lookup: {
+                        from: 'products', // Name of the Product collection
+                        localField: 'productId',
+                        foreignField: '_id',
+                        as: 'productInfo'
                     }
-                };
-        
-                // Apply brand filter if provided
-                if (brand) {
-                    filter['productId.Brand'] = brand;
+                },
+                {
+                    $unwind: '$productInfo' // Flatten the populated productInfo array
+                },
+                {
+                    $group: {
+                        _id: `$productInfo.${column.split('.')[1]}`, // Group by the requested field (e.g., Brand)
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0, // Exclude the _id field from the result
+                        uniqueValue: '$_id' // Store the distinct field value in a new field
+                    }
                 }
-        
-                // Apply dealerCode filter if provided
-                if (dealerCode) {
-                    filter.dealerCode = dealerCode;
-                }
-        
-                // Fetch the extraction records with the applied filters
-                const extractionRecords = await ExtractionRecord.find(filter).populate({
-                    path: 'productId',
-                    select: 'Brand Model Price Category Status'
-                });
-        
-                if (!extractionRecords || extractionRecords.length === 0) {
-                    return res.status(200).json({ message: 'No records found for the given filters.' });
-                }
-        
-                // (Process records just like in the previous version of the API)
-                // Initialize report structure, aggregate records, and return the formatted report
-        
-                return res.status(200).json(formattedReport);
-        
-            } catch (error) {
-                console.error(error);
-                return res.status(500).json({ error: 'Internal Server Error' });
-            }
-        };
-        
+            ]);
+
+            uniqueValues = aggregationResult.map((item) => item.uniqueValue);
+
+        } else {
+            // Query distinct values from ExtractionRecord itself (for non-product fields)
+            uniqueValues = await ExtractionRecord.distinct(column);
+        }
 
         if (!uniqueValues || uniqueValues.length === 0) {
             return res.status(200).json({ message: `No unique values found for column: ${column}` });
@@ -845,12 +826,14 @@ exports.getUniqueColumnValues = async (req, res) => {
 };
 
 
+
 exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     try {
-        const { startDate, endDate, brand, dealerCode, page = 1, limit = 100 } = req.query;
+        const { startDate, endDate, brand, model, category, segment, dealerCode, page = 1, limit = 100 } = req.query;
 
         // Initialize the filter object
         const filter = {};
+        const productFilter = {}; // This filter will hold conditions related to Product
 
         // Apply date range filter if startDate and endDate are provided
         if (startDate && endDate) {
@@ -870,14 +853,34 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
             return res.status(400).json({ error: 'Please provide both start date and end date.' });
         }
 
-        // Apply brand filter if provided
-        if (brand) {
-            filter['productId.Brand'] = brand;
-        }
-
         // Apply dealerCode filter if provided
         if (dealerCode) {
             filter.dealerCode = dealerCode;
+        }
+
+        // Apply brand, model, category, segment filters to the Product model if provided
+        if (brand) {
+            productFilter.Brand = brand;
+        }
+        if (model) {
+            productFilter.Model = model;
+        }
+        if (category) {
+            productFilter.Category = category;
+        }
+        if (segment) {
+            productFilter.Segment = segment;
+        }
+
+        // First, find matching products based on product filters
+        let productIds = [];
+        if (Object.keys(productFilter).length > 0) {
+            const matchingProducts = await Product.find(productFilter).select('_id');
+            if (!matchingProducts.length) {
+                return res.status(200).json({ message: 'No records found for the given product filters.' });
+            }
+            productIds = matchingProducts.map((product) => product._id);
+            filter.productId = { $in: productIds };
         }
 
         // Fetch the total number of records that match the filters
@@ -887,7 +890,7 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
         const extractionRecords = await ExtractionRecord.find(filter)
             .populate({
                 path: 'productId',
-                select: 'Brand Model Segment Category'
+                select: 'Brand Model Segment Category' // Select necessary fields from the Product model
             })
             .skip((page - 1) * limit)
             .limit(Number(limit));
@@ -954,6 +957,118 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+
+// exports.getExtractionDataForAdminWithFilters = async (req, res) => {
+//     try {
+//         const { startDate, endDate, brand, dealerCode, page = 1, limit = 100 } = req.query;
+
+//         // Initialize the filter object
+//         const filter = {};
+//         console.log("Brand: ", brand)
+
+//         // Apply date range filter if startDate and endDate are provided
+//         if (startDate && endDate) {
+//             const parsedStartDate = new Date(startDate);
+//             const parsedEndDate = new Date(endDate);
+
+//             // Ensure that startDate is before or equal to endDate
+//             if (parsedStartDate > parsedEndDate) {
+//                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
+//             }
+
+//             filter.date = {
+//                 $gte: parsedStartDate,
+//                 $lte: parsedEndDate
+//             };
+//         } else if (startDate || endDate) {
+//             return res.status(400).json({ error: 'Please provide both start date and end date.' });
+//         }
+
+//         // Apply brand filter if provided
+//         if (brand) {
+//             filter['productId.Brand'] = brand;
+//         }
+
+//         // Apply dealerCode filter if provided
+//         if (dealerCode) {
+//             filter.dealerCode = dealerCode;
+//         }
+
+//         // Fetch the total number of records that match the filters
+//         const totalRecords = await ExtractionRecord.countDocuments(filter);
+
+//         // Fetch the extraction records with pagination
+//         const extractionRecords = await ExtractionRecord.find(filter)
+//             .populate({
+//                 path: 'productId',
+//                 select: 'Brand Model Segment Category'
+//             })
+//             .skip((page - 1) * limit)
+//             .limit(Number(limit));
+
+//         if (!extractionRecords || extractionRecords.length === 0) {
+//             return res.status(200).json({ message: 'No records found for the given filters.' });
+//         }
+
+//         // Pre-fetch all employee and dealer data to optimize lookups
+//         const employees = await EmployeeCode.find().select('Name Code');
+//         const dealers = await Dealer.find().select('dealerCode shopName');
+
+//         const employeeMap = employees.reduce((acc, emp) => {
+//             acc[emp.Code] = emp.Name;
+//             return acc;
+//         }, {});
+
+//         const dealerMap = dealers.reduce((acc, dealer) => {
+//             acc[dealer.dealerCode] = dealer.shopName;
+//             return acc;
+//         }, {});
+
+//         // Aggregate the data
+//         const aggregatedData = {};
+
+//         for (const record of extractionRecords) {
+//             const dealerCode = record.dealerCode;
+//             const productId = record.productId._id;
+//             const uploadedBy = record.uploadedBy;
+
+//             const key = `${dealerCode}-${productId}-${uploadedBy}`;
+
+//             if (!aggregatedData[key]) {
+//                 aggregatedData[key] = {
+//                     ID: record._id,
+//                     'Dealer Code': dealerCode,
+//                     'Shop Name': dealerMap[dealerCode] || 'N/A',
+//                     Brand: record.productId.Brand,
+//                     Model: record.productId.Model,
+//                     Category: record.productId.Category,
+//                     'MTD Volume': 0,
+//                     'MTD Value': 0,
+//                     Segment: record.productId.Segment,
+//                     TSE: employeeMap[uploadedBy] || 'N/A',
+//                     'TSE Code': uploadedBy
+//                 };
+//             }
+
+//             aggregatedData[key]['MTD Volume'] += record.quantity;
+//             aggregatedData[key]['MTD Value'] += record.totalPrice;
+//         }
+
+//         const recordsWithDetails = Object.values(aggregatedData);
+
+//         const columns = ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'MTD Volume', 'MTD Value', 'Segment', 'TSE', 'TSE Code'];
+
+//         return res.status(200).json({
+//             totalRecords,
+//             data: [columns, ...recordsWithDetails]
+//         });
+
+//     } catch (error) {
+//         console.error('Error in getExtractionDataForAdminWithFilters:', error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 
 
