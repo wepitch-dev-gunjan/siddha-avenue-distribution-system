@@ -4,6 +4,7 @@ const { formatDate } = require('../helpers/extracttionHelpers');
 const EmployeeCode = require('../models/EmployeeCode');
 const Dealer = require('../models/Dealer');
 const Product = require("../models/Product");
+const SalesDataMTDW = require("../models/SalesDataMTDW");
 
 const { BACKEND_URL } = process.env;
 
@@ -825,54 +826,39 @@ exports.getUniqueColumnValues = async (req, res) => {
     }
 };
 
-
-
 exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     try {
         const { startDate, endDate, brand, model, category, segment, dealerCode, page = 1, limit = 100 } = req.query;
 
-        // Initialize the filter object
         const filter = {};
-        const productFilter = {}; // This filter will hold conditions related to Product
+        const productFilter = {}; // Filter for Product-specific fields
 
-        // Apply date range filter if startDate and endDate are provided
+        // Apply date range filter
         if (startDate && endDate) {
             const parsedStartDate = new Date(startDate);
             const parsedEndDate = new Date(endDate);
 
-            // Ensure that startDate is before or equal to endDate
             if (parsedStartDate > parsedEndDate) {
                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
             }
 
-            filter.date = {
-                $gte: parsedStartDate,
-                $lte: parsedEndDate
-            };
-        } else if (startDate || endDate) {
-            return res.status(400).json({ error: 'Please provide both start date and end date.' });
+            filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
         }
 
-        // Apply dealerCode filter if provided
-        if (dealerCode) {
-            filter.dealerCode = dealerCode;
+        // Apply dealerCode filter as an array using $in operator
+        if (dealerCode && dealerCode.length) {
+            filter.dealerCode = { $in: dealerCode };
         }
 
-        // Apply brand, model, category, segment filters to the Product model if provided
-        if (brand) {
-            productFilter.Brand = brand;
+        // Apply brand, model, category, segment filters as arrays using $in operator
+        if (brand && brand.length) {
+            productFilter.Brand = { $in: brand };
         }
-        if (model) {
-            productFilter.Model = model;
-        }
-        if (category) {
-            productFilter.Category = category;
-        }
-        if (segment) {
-            productFilter.Segment = segment;
+        if (segment && segment.length) {
+            productFilter.Segment = { $in: segment };
         }
 
-        // First, find matching products based on product filters
+        // Fetch matching products based on filters
         let productIds = [];
         if (Object.keys(productFilter).length > 0) {
             const matchingProducts = await Product.find(productFilter).select('_id');
@@ -880,17 +866,17 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
                 return res.status(200).json({ message: 'No records found for the given product filters.' });
             }
             productIds = matchingProducts.map((product) => product._id);
-            filter.productId = { $in: productIds };
+            filter.productId = { $in: productIds }; // Filter the extraction records by productId
         }
 
-        // Fetch the total number of records that match the filters
+        // Fetch the total number of records
         const totalRecords = await ExtractionRecord.countDocuments(filter);
 
         // Fetch the extraction records with pagination
         const extractionRecords = await ExtractionRecord.find(filter)
             .populate({
                 path: 'productId',
-                select: 'Brand Model Segment Category' // Select necessary fields from the Product model
+                select: 'Brand Model Segment Category'
             })
             .skip((page - 1) * limit)
             .limit(Number(limit));
@@ -899,7 +885,7 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
             return res.status(200).json({ message: 'No records found for the given filters.' });
         }
 
-        // Pre-fetch all employee and dealer data to optimize lookups
+        // Pre-fetch employee and dealer data
         const employees = await EmployeeCode.find().select('Name Code');
         const dealers = await Dealer.find().select('dealerCode shopName');
 
@@ -958,117 +944,286 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     }
 };
 
+exports.getExtractionOverviewForAdmins = async (req, res) => {
+    try {
+        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100 } = req.query;
 
-// exports.getExtractionDataForAdminWithFilters = async (req, res) => {
+        const filter = {};
+        const samsungFilter = {}; // Specific filter for Samsung's sales data
+
+        // Apply date range filter and check for empty dates
+        if (startDate && endDate) {
+            const parsedStartDate = new Date(startDate);
+            const parsedEndDate = new Date(endDate);
+            if (parsedStartDate > parsedEndDate) {
+                return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
+            }
+            filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
+            samsungFilter.DATE = { $gte: parsedStartDate, $lte: parsedEndDate };
+        } else {
+            // Fallback to default dates if not provided (e.g., current month for extraction, previous month for Samsung)
+            let today = new Date();
+            let firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            let firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            let lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+
+            filter.date = { $gte: firstDayOfCurrentMonth };
+            samsungFilter.DATE = { $gte: firstDayOfPreviousMonth, $lte: lastDayOfPreviousMonth };
+        }
+
+        // Apply dealerCode and TSE filters
+        if (dealerCode && dealerCode.length) {
+            filter.dealerCode = { $in: dealerCode };
+            samsungFilter['BUYER CODE'] = { $in: dealerCode };
+        }
+        if (tse && tse.length) {
+            filter.uploadedBy = { $in: tse };
+        }
+
+        // Fetch extraction data for other brands
+        const extractionRecords = await ExtractionRecord.find(filter)
+            .populate({ path: 'productId', select: 'Brand Model Price Category' });
+
+        // Initialize price classes and brands
+        const priceClasses = {
+            '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
+            '40-70k': {}, '70-100k': {}, '>100k': {}, 'Above 40k': {}, 'Below 40k': {}
+        };
+        const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'RealMe', 'Motorola', 'Others'];
+
+        // Initialize brand data structure
+        const brandData = {};
+        Object.keys(priceClasses).forEach((priceClass) => {
+            brandData[priceClass] = brands.reduce((acc, brand) => {
+                acc[brand] = 0;
+                return acc;
+            }, {});
+        });
+
+        // Process extraction records for non-Samsung brands
+        extractionRecords.forEach((record) => {
+            const product = record.productId;
+            const price = record.totalPrice / record.quantity;
+            let priceClass = getPriceClass(price);
+
+            if (!priceClass) return;
+
+            const brand = brands.includes(product.Brand) ? product.Brand : 'Others';
+            const valueToAdd = valueVolume === 'value' ? record.totalPrice : record.quantity;
+
+            brandData[priceClass][brand] += valueToAdd;
+        });
+
+        // Fetch Samsung's sales data from SalesDataMTDW
+        samsungFilter['SALES TYPE'] = 'Sell Out';
+        samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
+
+        const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
+
+        // Process Samsung's sales data
+        samsungSalesData.forEach((record) => {
+            const mtdValue = Number(record['MTD VALUE']);
+            const mtdVolume = Number(record['MTD VOLUME']);
+            const price = mtdValue / mtdVolume;
+
+            let priceClass = getPriceClass(price);
+            if (!priceClass) return;
+
+            const valueToAdd = valueVolume === 'value' ? mtdValue : mtdVolume;
+
+            brandData[priceClass]['Samsung'] += valueToAdd;
+        });
+
+        // Calculate Samsung's rank for each price class
+        const rankData = {};
+        Object.keys(brandData).forEach((priceClass) => {
+            const sortedBrands = Object.entries(brandData[priceClass]).sort((a, b) => b[1] - a[1]);
+            const samsungRank = sortedBrands.findIndex(([brand]) => brand === 'Samsung') + 1;
+            rankData[priceClass] = samsungRank || 0;
+        });
+
+        // Generate the response
+        let response = Object.keys(priceClasses).map((priceClass) => ({
+            'Price Class': priceClass,
+            Samsung: brandData[priceClass]['Samsung'],
+            Vivo: brandData[priceClass]['Vivo'],
+            Oppo: brandData[priceClass]['Oppo'],
+            Xiaomi: brandData[priceClass]['Xiaomi'],
+            Apple: brandData[priceClass]['Apple'],
+            'One Plus': brandData[priceClass]['OnePlus'],
+            'Real Me': brandData[priceClass]['RealMe'],
+            Motorola: brandData[priceClass]['Motorola'],
+            Others: brandData[priceClass]['Others'],
+            'Rank of Samsung': rankData[priceClass] || 0
+        }));
+
+        // Apply segment filter after generating the response
+        if (segment && segment.length) {
+            const normalizedSegments = segment.map((seg) => seg.toLowerCase());
+            response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
+        }
+
+        return res.status(200).json({
+            totalRecords: response.length,
+            data: response
+        });
+
+    } catch (error) {
+        console.error('Error in getExtractionOverviewForAdmins:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+// Helper function to determine price class based on price
+function getPriceClass(price) {
+    if (price >= 6000 && price <= 10000) return '6-10k';
+    if (price > 10000 && price <= 15000) return '10-15k';
+    if (price > 15000 && price <= 20000) return '15-20k';
+    if (price > 20000 && price <= 30000) return '20-30k';
+    if (price > 30000 && price <= 40000) return '30-40k';
+    if (price > 40000 && price <= 70000) return '40-70k';
+    if (price > 70000 && price <= 100000) return '70-100k';
+    if (price > 100000) return '>100k';
+    if (price > 40000) return 'Above 40k';
+    if (price <= 40000) return 'Below 40k';
+    return null;
+}
+
+
+
+
+
+// exports.getExtractionOverviewForAdmins = async (req, res) => {
 //     try {
-//         const { startDate, endDate, brand, dealerCode, page = 1, limit = 100 } = req.query;
+//         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100 } = req.query;
+//         console.log("Filters: ", startDate, endDate, valueVolume, segment, dealerCode, tse);
 
-//         // Initialize the filter object
 //         const filter = {};
-//         console.log("Brand: ", brand)
+//         const productFilter = {}; // Filter for Product-specific fields
 
-//         // Apply date range filter if startDate and endDate are provided
+//         // Apply date range filter
 //         if (startDate && endDate) {
 //             const parsedStartDate = new Date(startDate);
 //             const parsedEndDate = new Date(endDate);
-
-//             // Ensure that startDate is before or equal to endDate
 //             if (parsedStartDate > parsedEndDate) {
 //                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
 //             }
-
-//             filter.date = {
-//                 $gte: parsedStartDate,
-//                 $lte: parsedEndDate
-//             };
-//         } else if (startDate || endDate) {
-//             return res.status(400).json({ error: 'Please provide both start date and end date.' });
+//             filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
 //         }
 
-//         // Apply brand filter if provided
-//         if (brand) {
-//             filter['productId.Brand'] = brand;
+//         // Apply dealerCode and TSE filters
+//         if (dealerCode && dealerCode.length) {
+//             filter.dealerCode = { $in: dealerCode };
+//         }
+//         if (tse && tse.length) {
+//             filter.uploadedBy = { $in: tse };
 //         }
 
-//         // Apply dealerCode filter if provided
-//         if (dealerCode) {
-//             filter.dealerCode = dealerCode;
-//         }
-
-//         // Fetch the total number of records that match the filters
-//         const totalRecords = await ExtractionRecord.countDocuments(filter);
-
-//         // Fetch the extraction records with pagination
+//         // Fetch the relevant extraction records
 //         const extractionRecords = await ExtractionRecord.find(filter)
-//             .populate({
-//                 path: 'productId',
-//                 select: 'Brand Model Segment Category'
-//             })
-//             .skip((page - 1) * limit)
-//             .limit(Number(limit));
+//             .populate({ path: 'productId', select: 'Brand Model Price Category' });
 
 //         if (!extractionRecords || extractionRecords.length === 0) {
 //             return res.status(200).json({ message: 'No records found for the given filters.' });
 //         }
 
-//         // Pre-fetch all employee and dealer data to optimize lookups
-//         const employees = await EmployeeCode.find().select('Name Code');
-//         const dealers = await Dealer.find().select('dealerCode shopName');
+//         // Initialize price classes and brands
+//         const priceClasses = {
+//             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
+//             '40-70k': {}, '70-100k': {}, '>100k': {}, 'Above 40k': {}, 'Below 40k': {}
+//         };
+//         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'RealMe', 'Motorola', 'Others'];
 
-//         const employeeMap = employees.reduce((acc, emp) => {
-//             acc[emp.Code] = emp.Name;
-//             return acc;
-//         }, {});
+//         // Initialize data structure to store aggregated data
+//         const brandData = {};
+//         Object.keys(priceClasses).forEach((priceClass) => {
+//             brandData[priceClass] = brands.reduce((acc, brand) => {
+//                 acc[brand] = 0; // Initialize the value for each brand in each price class
+//                 return acc;
+//             }, {});
+//         });
 
-//         const dealerMap = dealers.reduce((acc, dealer) => {
-//             acc[dealer.dealerCode] = dealer.shopName;
-//             return acc;
-//         }, {});
+//         // Process extraction records
+//         extractionRecords.forEach((record) => {
+//             const product = record.productId;
+//             const price = record.totalPrice / record.quantity;
+//             let priceClass = getPriceClass(price);
 
-//         // Aggregate the data
-//         const aggregatedData = {};
+//             if (!priceClass) return; // Skip if no price class matches
 
-//         for (const record of extractionRecords) {
-//             const dealerCode = record.dealerCode;
-//             const productId = record.productId._id;
-//             const uploadedBy = record.uploadedBy;
+//             const brand = brands.includes(product.Brand) ? product.Brand : 'Others';
+//             const valueToAdd = valueVolume === 'value' ? record.totalPrice : record.quantity;
 
-//             const key = `${dealerCode}-${productId}-${uploadedBy}`;
+//             brandData[priceClass][brand] += valueToAdd;
+//         });
 
-//             if (!aggregatedData[key]) {
-//                 aggregatedData[key] = {
-//                     ID: record._id,
-//                     'Dealer Code': dealerCode,
-//                     'Shop Name': dealerMap[dealerCode] || 'N/A',
-//                     Brand: record.productId.Brand,
-//                     Model: record.productId.Model,
-//                     Category: record.productId.Category,
-//                     'MTD Volume': 0,
-//                     'MTD Value': 0,
-//                     Segment: record.productId.Segment,
-//                     TSE: employeeMap[uploadedBy] || 'N/A',
-//                     'TSE Code': uploadedBy
-//                 };
-//             }
+//         // Calculate Samsung's rank for each price class
+//         const rankData = {};
+//         Object.keys(brandData).forEach((priceClass) => {
+//             const sortedBrands = Object.entries(brandData[priceClass]).sort((a, b) => b[1] - a[1]);
+//             const samsungRank = sortedBrands.findIndex(([brand]) => brand === 'Samsung') + 1;
+//             rankData[priceClass] = samsungRank || 0;
+//         });
 
-//             aggregatedData[key]['MTD Volume'] += record.quantity;
-//             aggregatedData[key]['MTD Value'] += record.totalPrice;
+//         // Generate the response with all price classes
+//         let response = Object.keys(priceClasses).map((priceClass) => ({
+//             'Price Class': priceClass,
+//             Samsung: brandData[priceClass] ? brandData[priceClass]['Samsung'] : 0,
+//             Vivo: brandData[priceClass] ? brandData[priceClass]['Vivo'] : 0,
+//             Oppo: brandData[priceClass] ? brandData[priceClass]['Oppo'] : 0,
+//             Xiaomi: brandData[priceClass] ? brandData[priceClass]['Xiaomi'] : 0,
+//             Apple: brandData[priceClass] ? brandData[priceClass]['Apple'] : 0,
+//             'One Plus': brandData[priceClass] ? brandData[priceClass]['OnePlus'] : 0,
+//             'Real Me': brandData[priceClass] ? brandData[priceClass]['RealMe'] : 0,
+//             Motorola: brandData[priceClass] ? brandData[priceClass]['Motorola'] : 0,
+//             Others: brandData[priceClass] ? brandData[priceClass]['Others'] : 0,
+//             'Rank of Samsung': rankData[priceClass] || 0
+//         }));
+
+//         // Apply segment filter after generating the response
+//         if (segment && segment.length) {
+//             // Decapitalize all segment values and compare against decapitalized price classes
+//             const normalizedSegments = segment.map((seg) => seg.toLowerCase());
+//             response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
 //         }
 
-//         const recordsWithDetails = Object.values(aggregatedData);
-
-//         const columns = ['ID', 'Dealer Code', 'Shop Name', 'Brand', 'Model', 'Category', 'MTD Volume', 'MTD Value', 'Segment', 'TSE', 'TSE Code'];
-
 //         return res.status(200).json({
-//             totalRecords,
-//             data: [columns, ...recordsWithDetails]
+//             totalRecords: response.length,
+//             data: response
 //         });
 
 //     } catch (error) {
-//         console.error('Error in getExtractionDataForAdminWithFilters:', error);
+//         console.error('Error in getExtractionOverviewForAdmins:', error);
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
+
+// // Helper function to determine price class based on the price
+// function getPriceClass(price) {
+//     if (price >= 6000 && price <= 10000) return '6-10k';
+//     if (price > 10000 && price <= 15000) return '10-15k';
+//     if (price > 15000 && price <= 20000) return '15-20k';
+//     if (price > 20000 && price <= 30000) return '20-30k';
+//     if (price > 30000 && price <= 40000) return '30-40k';
+//     if (price > 40000 && price <= 70000) return '40-70k';
+//     if (price > 70000 && price <= 100000) return '70-100k';
+//     if (price > 100000) return '>100k';
+//     if (price > 40000) return 'Above 40k';
+//     if (price <= 40000) return 'Below 40k';
+//     return null;
+// }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

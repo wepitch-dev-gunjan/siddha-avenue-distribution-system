@@ -1,6 +1,6 @@
 const express = require("express");
 const { userAuth } = require("../middlewares/authMiddlewares");
-const { addExtractionRecord, getAllExtractionRecords, getExtractionDataForEmployee, getExtractionRecordsForAMonth, getExtractionReportForAdmins, getBrandComparisonReport, getSegmentAnalysisReport, getDealerPerformanceReport, getUniqueColumnValues, getExtractionDataForAdminWithFilters } = require("../controllers/extractionRecordControllers");
+const { addExtractionRecord, getAllExtractionRecords, getExtractionDataForEmployee, getExtractionRecordsForAMonth, getExtractionReportForAdmins, getBrandComparisonReport, getSegmentAnalysisReport, getDealerPerformanceReport, getUniqueColumnValues, getExtractionDataForAdminWithFilters, getExtractionOverviewForAdmins } = require("../controllers/extractionRecordControllers");
 const router = express.Router();
 
 
@@ -16,5 +16,6 @@ router.get("/extraction/dealer-performance", getDealerPerformanceReport);
 // New frontend routes:
 router.get("/extraction/unique-column-values", getUniqueColumnValues);
 router.get("/extraction/filtered-data", getExtractionDataForAdminWithFilters);
+router.get("/extraction/overview-for-admins", getExtractionOverviewForAdmins);
 
 module.exports = router;
