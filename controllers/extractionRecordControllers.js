@@ -951,6 +951,15 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         const filter = {};
         const samsungFilter = {}; // Specific filter for Samsung's sales data
 
+        // Helper function to format date as "M/D/YYYY"
+        const formatDate = (date) => {
+            const d = new Date(date);
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            const year = d.getFullYear();
+            return `${month}/${day}/${year}`;
+        };
+
         // Apply date range filter and check for empty dates
         if (startDate && endDate) {
             const parsedStartDate = new Date(startDate);
@@ -959,7 +968,10 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
             }
             filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
-            samsungFilter.DATE = { $gte: parsedStartDate, $lte: parsedEndDate };
+            samsungFilter.DATE = { 
+                $gte: formatDate(parsedStartDate), 
+                $lte: formatDate(parsedEndDate) 
+            };
         } else {
             // Fallback to default dates if not provided (e.g., current month for extraction, previous month for Samsung)
             let today = new Date();
@@ -968,7 +980,10 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             let lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
 
             filter.date = { $gte: firstDayOfCurrentMonth };
-            samsungFilter.DATE = { $gte: firstDayOfPreviousMonth, $lte: lastDayOfPreviousMonth };
+            samsungFilter.DATE = { 
+                $gte: formatDate(firstDayOfPreviousMonth), 
+                $lte: formatDate(lastDayOfPreviousMonth) 
+            };
         }
 
         // Apply dealerCode and TSE filters
@@ -987,7 +1002,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         // Initialize price classes and brands
         const priceClasses = {
             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
-            '40-70k': {}, '70-100k': {}, '>100k': {}, 'Above 40k': {}, 'Below 40k': {}
+            '40-70k': {}, '70-100k': {}, '>100k': {}, 
         };
         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'RealMe', 'Motorola', 'Others'];
 
@@ -1095,6 +1110,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 };
 
 
+
 // Helper function to determine price class based on price
 function getPriceClass(price) {
     if (price >= 6000 && price <= 10000) return '6-10k';
@@ -1105,8 +1121,8 @@ function getPriceClass(price) {
     if (price > 40000 && price <= 70000) return '40-70k';
     if (price > 70000 && price <= 100000) return '70-100k';
     if (price > 100000) return '>100k';
-    if (price > 40000) return 'Above 40k';
-    if (price <= 40000) return 'Below 40k';
+    // if (price > 40000) return 'Above 40k';
+    // if (price <= 40000) return 'Below 40k';
     return null;
 }
 
