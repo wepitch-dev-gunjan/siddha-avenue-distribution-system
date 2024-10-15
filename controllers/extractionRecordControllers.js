@@ -1063,6 +1063,26 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
         }
 
+        // Add totals row
+        const totalsRow = {
+            'Price Class': 'Totals',
+            Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0
+        };
+        response.forEach((row) => {
+            totalsRow.Samsung += row.Samsung;
+            totalsRow.Vivo += row.Vivo;
+            totalsRow.Oppo += row.Oppo;
+            totalsRow.Xiaomi += row.Xiaomi;
+            totalsRow.Apple += row.Apple;
+            totalsRow['One Plus'] += row['One Plus'];
+            totalsRow['Real Me'] += row['Real Me'];
+            totalsRow.Motorola += row.Motorola;
+            totalsRow.Others += row.Others;
+        });
+
+        // Add the totals row to the response
+        response.push(totalsRow);
+
         return res.status(200).json({
             totalRecords: response.length,
             data: response
@@ -1073,6 +1093,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
 
 // Helper function to determine price class based on price
 function getPriceClass(price) {
