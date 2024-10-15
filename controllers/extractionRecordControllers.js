@@ -1004,7 +1004,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
             '40-70k': {}, '70-100k': {}, '>100k': {}, 
         };
-        const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'RealMe', 'Motorola', 'Others'];
+        const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'Realme', 'Motorola', 'Others'];
 
         // Initialize brand data structure
         const brandData = {};
