@@ -1002,7 +1002,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         // Initialize price classes and brands
         const priceClasses = {
             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
-            '40-70k': {}, '70-100k': {}, '>100k': {}, 
+            '40-70k': {}, '70-100k': {}, '100k': {}, 
         };
         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'Realme', 'Motorola', 'Others'];
 
@@ -1103,7 +1103,8 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         // Add totals row (for actual values or share if showShare is true)
         const totalsRow = {
             'Price Class': 'Totals',
-            Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0
+            Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0,
+            'Rank of Samsung': 0
         };
 
         let overallTotal = { Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0 };
@@ -1153,6 +1154,22 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             totalsRow.Others = overallTotal.Others;
         }
 
+        // Calculate rank for Samsung in the totals row
+        const totalsRankData = [
+            ['Samsung', totalsRow.Samsung],
+            ['Vivo', totalsRow.Vivo],
+            ['Oppo', totalsRow.Oppo],
+            ['Xiaomi', totalsRow.Xiaomi],
+            ['Apple', totalsRow.Apple],
+            ['One Plus', totalsRow['One Plus']],
+            ['Real Me', totalsRow['Real Me']],
+            ['Motorola', totalsRow.Motorola],
+            ['Others', totalsRow.Others]
+        ];
+
+        totalsRankData.sort((a, b) => b[1] - a[1]);
+        totalsRow['Rank of Samsung'] = totalsRankData.findIndex(([brand]) => brand === 'Samsung') + 1;
+
         // Add the totals row to the response
         response.push(totalsRow);
 
@@ -1173,6 +1190,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
 
 
+
 // Helper function to determine price class based on price
 function getPriceClass(price) {
     if (price >= 6000 && price <= 10000) return '6-10k';
@@ -1182,7 +1200,7 @@ function getPriceClass(price) {
     if (price > 30000 && price <= 40000) return '30-40k';
     if (price > 40000 && price <= 70000) return '40-70k';
     if (price > 70000 && price <= 100000) return '70-100k';
-    if (price > 100000) return '>100k';
+    if (price > 100000) return '100k';
     // if (price > 40000) return 'Above 40k';
     // if (price <= 40000) return 'Below 40k';
     return null;
@@ -1192,7 +1210,7 @@ function getPriceClass(price) {
 
 // exports.getExtractionOverviewForAdmins = async (req, res) => {
 //     try {
-//         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100 } = req.query;
+//         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100, showShare = 'false' } = req.query;
 
 //         const filter = {};
 //         const samsungFilter = {}; // Specific filter for Samsung's sales data
@@ -1206,7 +1224,7 @@ function getPriceClass(price) {
 //             return `${month}/${day}/${year}`;
 //         };
 
-//         // Apply date range filter and check for empty dates
+//         // Apply date range filter
 //         if (startDate && endDate) {
 //             const parsedStartDate = new Date(startDate);
 //             const parsedEndDate = new Date(endDate);
@@ -1248,7 +1266,7 @@ function getPriceClass(price) {
 //         // Initialize price classes and brands
 //         const priceClasses = {
 //             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
-//             '40-70k': {}, '70-100k': {}, '>100k': {}, 
+//             '40-70k': {}, '70-100k': {}, '100k': {}, 
 //         };
 //         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'Realme', 'Motorola', 'Others'];
 
@@ -1304,19 +1322,41 @@ function getPriceClass(price) {
 //         });
 
 //         // Generate the response
-//         let response = Object.keys(priceClasses).map((priceClass) => ({
-//             'Price Class': priceClass,
-//             Samsung: brandData[priceClass]['Samsung'],
-//             Vivo: brandData[priceClass]['Vivo'],
-//             Oppo: brandData[priceClass]['Oppo'],
-//             Xiaomi: brandData[priceClass]['Xiaomi'],
-//             Apple: brandData[priceClass]['Apple'],
-//             'One Plus': brandData[priceClass]['OnePlus'],
-//             'Real Me': brandData[priceClass]['Realme'],
-//             Motorola: brandData[priceClass]['Motorola'],
-//             Others: brandData[priceClass]['Others'],
-//             'Rank of Samsung': rankData[priceClass] || 0
-//         }));
+//         let response = Object.keys(priceClasses).map((priceClass) => {
+//             const rowData = {
+//                 'Price Class': priceClass,
+//                 Samsung: brandData[priceClass]['Samsung'],
+//                 Vivo: brandData[priceClass]['Vivo'],
+//                 Oppo: brandData[priceClass]['Oppo'],
+//                 Xiaomi: brandData[priceClass]['Xiaomi'],
+//                 Apple: brandData[priceClass]['Apple'],
+//                 'One Plus': brandData[priceClass]['OnePlus'],
+//                 'Real Me': brandData[priceClass]['Realme'],
+//                 Motorola: brandData[priceClass]['Motorola'],
+//                 Others: brandData[priceClass]['Others'],
+//                 'Rank of Samsung': rankData[priceClass] || 0
+//             };
+
+//             // Calculate total sales/volume for the price class
+//             const totalForPriceClass = rowData.Samsung + rowData.Vivo + rowData.Oppo + rowData.Xiaomi +
+//                                        rowData.Apple + rowData['One Plus'] + rowData['Real Me'] +
+//                                        rowData.Motorola + rowData.Others;
+
+//             // If showShare is true, calculate percentage contribution for each brand
+//             if (showShare === 'true') {
+//                 rowData.Samsung = ((rowData.Samsung / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Vivo = ((rowData.Vivo / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Oppo = ((rowData.Oppo / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Xiaomi = ((rowData.Xiaomi / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Apple = ((rowData.Apple / totalForPriceClass) * 100).toFixed(2);
+//                 rowData['One Plus'] = ((rowData['One Plus'] / totalForPriceClass) * 100).toFixed(2);
+//                 rowData['Real Me'] = ((rowData['Real Me'] / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Motorola = ((rowData.Motorola / totalForPriceClass) * 100).toFixed(2);
+//                 rowData.Others = ((rowData.Others / totalForPriceClass) * 100).toFixed(2);
+//             }
+
+//             return rowData;
+//         });
 
 //         // Apply segment filter after generating the response
 //         if (segment && segment.length) {
@@ -1324,22 +1364,58 @@ function getPriceClass(price) {
 //             response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
 //         }
 
-//         // Add totals row
+//         // Add totals row (for actual values or share if showShare is true)
 //         const totalsRow = {
 //             'Price Class': 'Totals',
 //             Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0
 //         };
+
+//         let overallTotal = { Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0 };
+//         let totalSalesVolume = 0;
+
+//         // Sum the total sales/volume for each brand across all price classes
 //         response.forEach((row) => {
-//             totalsRow.Samsung += row.Samsung;
-//             totalsRow.Vivo += row.Vivo;
-//             totalsRow.Oppo += row.Oppo;
-//             totalsRow.Xiaomi += row.Xiaomi;
-//             totalsRow.Apple += row.Apple;
-//             totalsRow['One Plus'] += row['One Plus'];
-//             totalsRow['Real Me'] += row['Real Me'];
-//             totalsRow.Motorola += row.Motorola;
-//             totalsRow.Others += row.Others;
+//             if (row['Price Class'] !== 'Totals') {  // Skip totals row
+//                 overallTotal.Samsung += typeof row.Samsung === 'string' ? parseFloat(row.Samsung) : row.Samsung;
+//                 overallTotal.Vivo += typeof row.Vivo === 'string' ? parseFloat(row.Vivo) : row.Vivo;
+//                 overallTotal.Oppo += typeof row.Oppo === 'string' ? parseFloat(row.Oppo) : row.Oppo;
+//                 overallTotal.Xiaomi += typeof row.Xiaomi === 'string' ? parseFloat(row.Xiaomi) : row.Xiaomi;
+//                 overallTotal.Apple += typeof row.Apple === 'string' ? parseFloat(row.Apple) : row.Apple;
+//                 overallTotal['One Plus'] += typeof row['One Plus'] === 'string' ? parseFloat(row['One Plus']) : row['One Plus'];
+//                 overallTotal['Real Me'] += typeof row['Real Me'] === 'string' ? parseFloat(row['Real Me']) : row['Real Me'];
+//                 overallTotal.Motorola += typeof row.Motorola === 'string' ? parseFloat(row.Motorola) : row.Motorola;
+//                 overallTotal.Others += typeof row.Others === 'string' ? parseFloat(row.Others) : row.Others;
+//             }
 //         });
+
+//         // Calculate the total sales/volume across all brands for the totals row
+//         totalSalesVolume = overallTotal.Samsung + overallTotal.Vivo + overallTotal.Oppo + overallTotal.Xiaomi +
+//                            overallTotal.Apple + overallTotal['One Plus'] + overallTotal['Real Me'] +
+//                            overallTotal.Motorola + overallTotal.Others;
+
+//         if (showShare === 'true') {
+//             // Calculate the share for each brand in the totals row
+//             totalsRow.Samsung = ((overallTotal.Samsung / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Vivo = ((overallTotal.Vivo / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Oppo = ((overallTotal.Oppo / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Xiaomi = ((overallTotal.Xiaomi / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Apple = ((overallTotal.Apple / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow['One Plus'] = ((overallTotal['One Plus'] / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow['Real Me'] = ((overallTotal['Real Me'] / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Motorola = ((overallTotal.Motorola / totalSalesVolume) * 100).toFixed(2);
+//             totalsRow.Others = ((overallTotal.Others / totalSalesVolume) * 100).toFixed(2);
+//         } else {
+//             // Just use the actual values
+//             totalsRow.Samsung = overallTotal.Samsung;
+//             totalsRow.Vivo = overallTotal.Vivo;
+//             totalsRow.Oppo = overallTotal.Oppo;
+//             totalsRow.Xiaomi = overallTotal.Xiaomi;
+//             totalsRow.Apple = overallTotal.Apple;
+//             totalsRow['One Plus'] = overallTotal['One Plus'];
+//             totalsRow['Real Me'] = overallTotal['Real Me'];
+//             totalsRow.Motorola = overallTotal.Motorola;
+//             totalsRow.Others = overallTotal.Others;
+//         }
 
 //         // Add the totals row to the response
 //         response.push(totalsRow);
@@ -1354,7 +1430,6 @@ function getPriceClass(price) {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
 
 
 
