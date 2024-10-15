@@ -1066,7 +1066,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             Xiaomi: brandData[priceClass]['Xiaomi'],
             Apple: brandData[priceClass]['Apple'],
             'One Plus': brandData[priceClass]['OnePlus'],
-            'Real Me': brandData[priceClass]['RealMe'],
+            'Real Me': brandData[priceClass]['Realme'],
             Motorola: brandData[priceClass]['Motorola'],
             Others: brandData[priceClass]['Others'],
             'Rank of Samsung': rankData[priceClass] || 0
