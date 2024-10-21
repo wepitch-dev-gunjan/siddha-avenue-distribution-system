@@ -5,6 +5,7 @@ const EmployeeCode = require('../models/EmployeeCode');
 const Dealer = require('../models/Dealer');
 const Product = require("../models/Product");
 const SalesDataMTDW = require("../models/SalesDataMTDW");
+const DealerListTseWise = require('../models/DealerListTseWise');
 
 const { BACKEND_URL } = process.env;
 
@@ -767,9 +768,11 @@ exports.getDealerPerformanceReport = async (req, res) => {
 
 
 // New frontend apis: 
+
 exports.getUniqueColumnValues = async (req, res) => {
     try {
         const { column } = req.query;
+        console.log("column: ", column);
 
         if (!column) {
             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
@@ -781,36 +784,40 @@ exports.getUniqueColumnValues = async (req, res) => {
         if (column.startsWith('productId.')) {
             // This means we're querying a field from the Product model, so we need to populate productId
 
-            // Use MongoDB aggregation to get distinct values from the populated productId fields
             const aggregationResult = await ExtractionRecord.aggregate([
                 {
                     $lookup: {
-                        from: 'products', // Name of the Product collection
+                        from: 'products',
                         localField: 'productId',
                         foreignField: '_id',
                         as: 'productInfo'
                     }
                 },
                 {
-                    $unwind: '$productInfo' // Flatten the populated productInfo array
+                    $unwind: '$productInfo'
                 },
                 {
                     $group: {
-                        _id: `$productInfo.${column.split('.')[1]}`, // Group by the requested field (e.g., Brand)
+                        _id: `$productInfo.${column.split('.')[1]}`,
                     }
                 },
                 {
                     $project: {
-                        _id: 0, // Exclude the _id field from the result
-                        uniqueValue: '$_id' // Store the distinct field value in a new field
+                        _id: 0,
+                        uniqueValue: '$_id'
                     }
                 }
             ]);
 
             uniqueValues = aggregationResult.map((item) => item.uniqueValue);
 
+        } else if ([
+            'type', 'area', 'tlname', 'abm', 'ase', 'asm', 'rso', 'zsm'
+        ].includes(column.toLowerCase())) {
+            // Query distinct values from DealerListTseWise for these specific fields
+            uniqueValues = await DealerListTseWise.distinct(column);
         } else {
-            // Query distinct values from ExtractionRecord itself (for non-product fields)
+            // Query distinct values from ExtractionRecord itself (for other fields)
             uniqueValues = await ExtractionRecord.distinct(column);
         }
 
@@ -818,6 +825,7 @@ exports.getUniqueColumnValues = async (req, res) => {
             return res.status(200).json({ message: `No unique values found for column: ${column}` });
         }
 
+        console.log("Column and Unique Values: ", column, uniqueValues);
         return res.status(200).json({ uniqueValues });
 
     } catch (error) {
@@ -825,6 +833,67 @@ exports.getUniqueColumnValues = async (req, res) => {
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+
+// exports.getUniqueColumnValues = async (req, res) => {
+//     try {
+//         const { column } = req.query;
+//         console.log("column: ", column);
+
+//         if (!column) {
+//             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
+//         }
+
+//         let uniqueValues;
+
+//         // Check if the requested column is part of the Product model
+//         if (column.startsWith('productId.')) {
+//             // This means we're querying a field from the Product model, so we need to populate productId
+
+//             // Use MongoDB aggregation to get distinct values from the populated productId fields
+//             const aggregationResult = await ExtractionRecord.aggregate([
+//                 {
+//                     $lookup: {
+//                         from: 'products', // Name of the Product collection
+//                         localField: 'productId',
+//                         foreignField: '_id',
+//                         as: 'productInfo'
+//                     }
+//                 },
+//                 {
+//                     $unwind: '$productInfo' // Flatten the populated productInfo array
+//                 },
+//                 {
+//                     $group: {
+//                         _id: `$productInfo.${column.split('.')[1]}`, // Group by the requested field (e.g., Brand)
+//                     }
+//                 },
+//                 {
+//                     $project: {
+//                         _id: 0, // Exclude the _id field from the result
+//                         uniqueValue: '$_id' // Store the distinct field value in a new field
+//                     }
+//                 }
+//             ]);
+
+//             uniqueValues = aggregationResult.map((item) => item.uniqueValue);
+
+//         } else {
+//             // Query distinct values from ExtractionRecord itself (for non-product fields)
+//             uniqueValues = await ExtractionRecord.distinct(column);
+//         }
+
+//         if (!uniqueValues || uniqueValues.length === 0) {
+//             return res.status(200).json({ message: `No unique values found for column: ${column}` });
+//         }
+//         console.log("Column and Unique Values: ", column, uniqueValues);
+//         return res.status(200).json({ uniqueValues });
+
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     try {
@@ -946,12 +1015,11 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
 
 exports.getExtractionOverviewForAdmins = async (req, res) => {
     try {
-        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100, showShare = 'false' } = req.query;
+        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
 
         const filter = {};
-        const samsungFilter = {}; // Specific filter for Samsung's sales data
+        const samsungFilter = {};
 
-        // Helper function to format date as "M/D/YYYY"
         const formatDate = (date) => {
             const d = new Date(date);
             const month = d.getMonth() + 1;
@@ -973,7 +1041,6 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                 $lte: formatDate(parsedEndDate) 
             };
         } else {
-            // Fallback to default dates if not provided (e.g., current month for extraction, previous month for Samsung)
             let today = new Date();
             let firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             let firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -986,13 +1053,53 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             };
         }
 
-        // Apply dealerCode and TSE filters
-        if (dealerCode && dealerCode.length) {
-            filter.dealerCode = { $in: dealerCode };
-            samsungFilter['BUYER CODE'] = { $in: dealerCode };
-        }
+        // Construct dealer-specific filters dynamically based on the provided filters
+        const dealerFilters = {};
         if (tse && tse.length) {
-            filter.uploadedBy = { $in: tse };
+            dealerFilters.TSE = { $in: tse };
+        }
+        if (zsm && zsm.length) {
+            dealerFilters.ZSM = { $in: zsm };
+        }
+        if (area && area.length) {
+            dealerFilters.Area = { $in: area };
+        }
+        if (tlName && tlName.length) {
+            dealerFilters['TL NAME'] = { $in: tlName };
+        }
+        if (abm && abm.length) {
+            dealerFilters.ABM = { $in: abm };
+        }
+        if (ase && ase.length) {
+            dealerFilters.ASE = { $in: ase };
+        }
+        if (asm && asm.length) {
+            dealerFilters.ASM = { $in: asm };
+        }
+        if (rso && rso.length) {
+            dealerFilters.RSO = { $in: rso };
+        }
+        if (type && type.length) {
+            dealerFilters.TYPE = { $in: type };
+        }
+
+        // Fetch dealer codes based on the filters from DealerListTseWise
+        let dealerCodes = [];
+        if (Object.keys(dealerFilters).length > 0) {
+            const dealers = await DealerListTseWise.find(dealerFilters).select('Dealer Code -_id');
+            dealerCodes = dealers.map(dealer => dealer['Dealer Code']);
+            console.log("Filtered Dealer Codes based on DealerListTseWise: ", dealerCodes);
+        }
+
+        // If dealerCode is provided in the request, combine it with the dealerCodes fetched above
+        if (dealerCode && dealerCode.length) {
+            dealerCodes = dealerCodes.length ? dealerCodes.filter(code => dealerCode.includes(code)) : dealerCode;
+        }
+
+        // If we have filtered dealer codes, apply them to the main query
+        if (dealerCodes.length > 0) {
+            filter.dealerCode = { $in: dealerCodes };
+            samsungFilter['BUYER CODE'] = { $in: dealerCodes };
         }
 
         // Fetch extraction data for other brands
@@ -1073,22 +1180,16 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                 'Rank of Samsung': rankData[priceClass] || 0
             };
 
-            // Calculate total sales/volume for the price class
             const totalForPriceClass = rowData.Samsung + rowData.Vivo + rowData.Oppo + rowData.Xiaomi +
                                        rowData.Apple + rowData['One Plus'] + rowData['Real Me'] +
                                        rowData.Motorola + rowData.Others;
 
-            // If showShare is true, calculate percentage contribution for each brand
-            if (showShare === 'true') {
-                rowData.Samsung = ((rowData.Samsung / totalForPriceClass) * 100).toFixed(2);
-                rowData.Vivo = ((rowData.Vivo / totalForPriceClass) * 100).toFixed(2);
-                rowData.Oppo = ((rowData.Oppo / totalForPriceClass) * 100).toFixed(2);
-                rowData.Xiaomi = ((rowData.Xiaomi / totalForPriceClass) * 100).toFixed(2);
-                rowData.Apple = ((rowData.Apple / totalForPriceClass) * 100).toFixed(2);
-                rowData['One Plus'] = ((rowData['One Plus'] / totalForPriceClass) * 100).toFixed(2);
-                rowData['Real Me'] = ((rowData['Real Me'] / totalForPriceClass) * 100).toFixed(2);
-                rowData.Motorola = ((rowData.Motorola / totalForPriceClass) * 100).toFixed(2);
-                rowData.Others = ((rowData.Others / totalForPriceClass) * 100).toFixed(2);
+            if (showShare === 'true' && totalForPriceClass > 0) {
+                Object.keys(rowData).forEach(brand => {
+                    if (brand !== 'Price Class' && brand !== 'Rank of Samsung') {
+                        rowData[brand] = ((rowData[brand] / totalForPriceClass) * 100).toFixed(2);
+                    }
+                });
             }
 
             return rowData;
@@ -1112,7 +1213,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
         // Sum the total sales/volume for each brand across all price classes
         response.forEach((row) => {
-            if (row['Price Class'] !== 'Totals') {  // Skip totals row
+            if (row['Price Class'] !== 'Totals') {
                 overallTotal.Samsung += typeof row.Samsung === 'string' ? parseFloat(row.Samsung) : row.Samsung;
                 overallTotal.Vivo += typeof row.Vivo === 'string' ? parseFloat(row.Vivo) : row.Vivo;
                 overallTotal.Oppo += typeof row.Oppo === 'string' ? parseFloat(row.Oppo) : row.Oppo;
@@ -1125,13 +1226,11 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             }
         });
 
-        // Calculate the total sales/volume across all brands for the totals row
         totalSalesVolume = overallTotal.Samsung + overallTotal.Vivo + overallTotal.Oppo + overallTotal.Xiaomi +
                            overallTotal.Apple + overallTotal['One Plus'] + overallTotal['Real Me'] +
                            overallTotal.Motorola + overallTotal.Others;
 
         if (showShare === 'true') {
-            // Calculate the share for each brand in the totals row
             totalsRow.Samsung = ((overallTotal.Samsung / totalSalesVolume) * 100).toFixed(2);
             totalsRow.Vivo = ((overallTotal.Vivo / totalSalesVolume) * 100).toFixed(2);
             totalsRow.Oppo = ((overallTotal.Oppo / totalSalesVolume) * 100).toFixed(2);
@@ -1142,7 +1241,6 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             totalsRow.Motorola = ((overallTotal.Motorola / totalSalesVolume) * 100).toFixed(2);
             totalsRow.Others = ((overallTotal.Others / totalSalesVolume) * 100).toFixed(2);
         } else {
-            // Just use the actual values
             totalsRow.Samsung = overallTotal.Samsung;
             totalsRow.Vivo = overallTotal.Vivo;
             totalsRow.Oppo = overallTotal.Oppo;
@@ -1154,7 +1252,6 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             totalsRow.Others = overallTotal.Others;
         }
 
-        // Calculate rank for Samsung in the totals row
         const totalsRankData = [
             ['Samsung', totalsRow.Samsung],
             ['Vivo', totalsRow.Vivo],
@@ -1191,6 +1288,12 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
 
 
+
+
+
+
+
+
 // Helper function to determine price class based on price
 function getPriceClass(price) {
     if (price >= 6000 && price <= 10000) return '6-10k';
@@ -1206,11 +1309,9 @@ function getPriceClass(price) {
     return null;
 }
 
-
-
 // exports.getExtractionOverviewForAdmins = async (req, res) => {
 //     try {
-//         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, page = 1, limit = 100, showShare = 'false' } = req.query;
+//         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
 
 //         const filter = {};
 //         const samsungFilter = {}; // Specific filter for Samsung's sales data
@@ -1257,6 +1358,30 @@ function getPriceClass(price) {
 //         }
 //         if (tse && tse.length) {
 //             filter.uploadedBy = { $in: tse };
+//         }
+//         if (type && type.length) {
+//             filter.TYPE = { $in: type };
+//         }
+//         if (area && area.length) {
+//             filter.Area = { $in: area };
+//         }
+//         if (tlName && tlName.length) {
+//             filter['TL NAME'] = { $in: tlName };
+//         }
+//         if (abm && abm.length) {
+//             filter.ABM = { $in: abm };
+//         }
+//         if (ase && ase.length) {
+//             filter.ASE = { $in: ase };
+//         }
+//         if (asm && asm.length) {
+//             filter.ASM = { $in: asm };
+//         }
+//         if (rso && rso.length) {
+//             filter.RSO = { $in: rso };
+//         }
+//         if (zsm && zsm.length) {
+//             filter.ZSM = { $in: zsm };
 //         }
 
 //         // Fetch extraction data for other brands
@@ -1367,7 +1492,8 @@ function getPriceClass(price) {
 //         // Add totals row (for actual values or share if showShare is true)
 //         const totalsRow = {
 //             'Price Class': 'Totals',
-//             Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0
+//             Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0,
+//             'Rank of Samsung': 0
 //         };
 
 //         let overallTotal = { Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0 };
@@ -1417,6 +1543,22 @@ function getPriceClass(price) {
 //             totalsRow.Others = overallTotal.Others;
 //         }
 
+//         // Calculate rank for Samsung in the totals row
+//         const totalsRankData = [
+//             ['Samsung', totalsRow.Samsung],
+//             ['Vivo', totalsRow.Vivo],
+//             ['Oppo', totalsRow.Oppo],
+//             ['Xiaomi', totalsRow.Xiaomi],
+//             ['Apple', totalsRow.Apple],
+//             ['One Plus', totalsRow['One Plus']],
+//             ['Real Me', totalsRow['Real Me']],
+//             ['Motorola', totalsRow.Motorola],
+//             ['Others', totalsRow.Others]
+//         ];
+
+//         totalsRankData.sort((a, b) => b[1] - a[1]);
+//         totalsRow['Rank of Samsung'] = totalsRankData.findIndex(([brand]) => brand === 'Samsung') + 1;
+
 //         // Add the totals row to the response
 //         response.push(totalsRow);
 
@@ -1430,9 +1572,6 @@ function getPriceClass(price) {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
-
-
 
 
 

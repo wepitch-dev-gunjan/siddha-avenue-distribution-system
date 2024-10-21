@@ -62,63 +62,63 @@ exports.uploadDealerListTseWise = async (req, res) => {
     }
   };
 
-  exports.updateDealerListWithSalesData = async (req, res) => {
-    try {
-      // Fetch all dealer entries from DealerListTseWise
-      const dealers = await DealerListTseWise.find();
-      console.log("Dealers: ", dealers);
-  
-      // Initialize an array to keep track of updated dealers
-      let updatedDealers = [];
-  
-      // Iterate through each dealer entry
-      for (const dealer of dealers) {
-        const dealerCode = dealer["Dealer Code"]; // Get the dealer code
-        console.log("dealerCode: ", dealerCode);
-  
-        // Fetch the most recent sales data for the dealer code, sorted by date
-        const salesData = await SalesDataMTDW.findOne({ "BUYER CODE": dealerCode })
-          .sort({ DATE: -1 }) // Sorting in descending order by DATE to get the most recent entry
-          .limit(1);
-  
-        // If sales data is found, update the dealer entry with ASM, ASE, ABM, ZSM, RSO
-        if (salesData) {
-          // Prepare the fields to be updated or added
-          const updatedFields = {
-            ASM: salesData.ASM || dealer.ASM || "",
-            ASE: salesData.ASE || dealer.ASE || "",
-            ABM: salesData.ABM || dealer.ABM || "",
-            ZSM: salesData.ZSM || dealer.ZSM || "",
-            RSO: salesData.RSO || dealer.RSO || ""
-          };
-  
-          // Update the dealer in the database
-          const updatedDealer = await DealerListTseWise.updateOne(
-            { 'Dealer Code': dealerCode },
-            { $set: updatedFields }
-          );
-  
-          if (updatedDealer.nModified > 0) {
-            updatedDealers.push(dealerCode);
-          }
+exports.updateDealerListWithSalesData = async (req, res) => {
+  try {
+    // Fetch all dealer entries from DealerListTseWise
+    const dealers = await DealerListTseWise.find();
+    console.log("Dealers: ", dealers);
+
+    // Initialize an array to keep track of updated dealers
+    let updatedDealers = [];
+
+    // Iterate through each dealer entry
+    for (const dealer of dealers) {
+      const dealerCode = dealer["Dealer Code"]; // Get the dealer code
+      console.log("dealerCode: ", dealerCode);
+
+      // Fetch the most recent sales data for the dealer code, sorted by date
+      const salesData = await SalesDataMTDW.findOne({ "BUYER CODE": dealerCode })
+        .sort({ DATE: -1 }) // Sorting in descending order by DATE to get the most recent entry
+        .limit(1);
+
+      // If sales data is found, update the dealer entry with ASM, ASE, ABM, ZSM, RSO
+      if (salesData) {
+        // Prepare the fields to be updated or added
+        const updatedFields = {
+          ASM: salesData.ASM || dealer.ASM || "",
+          ASE: salesData.ASE || dealer.ASE || "",
+          ABM: salesData.ABM || dealer.ABM || "",
+          ZSM: salesData.ZSM || dealer.ZSM || "",
+          RSO: salesData.RSO || dealer.RSO || ""
+        };
+
+        // Update the dealer in the database
+        const updatedDealer = await DealerListTseWise.updateOne(
+          { 'Dealer Code': dealerCode },
+          { $set: updatedFields }
+        );
+
+        if (updatedDealer.nModified > 0) {
+          updatedDealers.push(dealerCode);
         }
       }
-  
-      if (updatedDealers.length > 0) {
-        res.status(200).send({
-          message: "Dealer list updated successfully",
-          updatedDealers,
-        });
-      } else {
-        res.status(200).send({
-          message: "No dealers were updated, no matching sales data found",
-        });
-      }
-    } catch (error) {
-      console.log(error);
-      res.status(500).send("Internal server error while updating dealer list");
     }
-  };
+
+    if (updatedDealers.length > 0) {
+      res.status(200).send({
+        message: "Dealer list updated successfully",
+        updatedDealers,
+      });
+    } else {
+      res.status(200).send({
+        message: "No dealers were updated, no matching sales data found",
+      });
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).send("Internal server error while updating dealer list");
+  }
+};
   
 
 
