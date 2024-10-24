@@ -772,7 +772,7 @@ exports.getDealerPerformanceReport = async (req, res) => {
 exports.getUniqueColumnValues = async (req, res) => {
     try {
         const { column } = req.query;
-        console.log("column: ", column);
+        // console.log("column: ", column);
 
         if (!column) {
             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
@@ -825,7 +825,7 @@ exports.getUniqueColumnValues = async (req, res) => {
             return res.status(200).json({ message: `No unique values found for column: ${column}` });
         }
 
-        console.log("Column and Unique Values: ", column, uniqueValues);
+        // console.log("Column and Unique Values: ", column, uniqueValues);
         return res.status(200).json({ uniqueValues });
 
     } catch (error) {
@@ -1013,6 +1013,7 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     }
 };
 
+
 exports.getExtractionOverviewForAdmins = async (req, res) => {
     try {
         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
@@ -1083,20 +1084,37 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             dealerFilters.TYPE = { $in: type };
         }
 
-        // Fetch dealer codes based on the filters from DealerListTseWise
+        console.log("Dealer Filters: ", dealerFilters);
+
+        // Fetch dealer codes based on the combined filters from DealerListTseWise
+        // Fetch dealer codes based on the combined filters from DealerListTseWise
         let dealerCodes = [];
         if (Object.keys(dealerFilters).length > 0) {
-            const dealers = await DealerListTseWise.find(dealerFilters).select('Dealer Code -_id');
+            // Use bracket notation to select 'Dealer Code'
+            const dealers = await DealerListTseWise.find(dealerFilters).select({ 'Dealer Code': 1 });
+            console.log("Dealers fetched:", dealers); // Log the full dealer objects to check the structure
+
+            // Inspect the structure of a single dealer object
+            if (dealers.length > 0) {
+                console.log("Example dealer object:", dealers[0]);
+            }
+
+            // Map the dealer codes using bracket notation
             dealerCodes = dealers.map(dealer => dealer['Dealer Code']);
-            console.log("Filtered Dealer Codes based on DealerListTseWise: ", dealerCodes);
         }
+
+        console.log("Dealer codes filtered: ", dealerCodes);
+
+
+
+        // console.log("Dealers: ", dealers);
 
         // If dealerCode is provided in the request, combine it with the dealerCodes fetched above
         if (dealerCode && dealerCode.length) {
             dealerCodes = dealerCodes.length ? dealerCodes.filter(code => dealerCode.includes(code)) : dealerCode;
         }
 
-        // If we have filtered dealer codes, apply them to the main query
+        // Apply the filtered dealer codes to the main query
         if (dealerCodes.length > 0) {
             filter.dealerCode = { $in: dealerCodes };
             samsungFilter['BUYER CODE'] = { $in: dealerCodes };
@@ -1201,7 +1219,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
         }
 
-        // Add totals row (for actual values or share if showShare is true)
+        // Add totals row
         const totalsRow = {
             'Price Class': 'Totals',
             Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0,
@@ -1214,44 +1232,29 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         // Sum the total sales/volume for each brand across all price classes
         response.forEach((row) => {
             if (row['Price Class'] !== 'Totals') {
-                overallTotal.Samsung += typeof row.Samsung === 'string' ? parseFloat(row.Samsung) : row.Samsung;
-                overallTotal.Vivo += typeof row.Vivo === 'string' ? parseFloat(row.Vivo) : row.Vivo;
-                overallTotal.Oppo += typeof row.Oppo === 'string' ? parseFloat(row.Oppo) : row.Oppo;
-                overallTotal.Xiaomi += typeof row.Xiaomi === 'string' ? parseFloat(row.Xiaomi) : row.Xiaomi;
-                overallTotal.Apple += typeof row.Apple === 'string' ? parseFloat(row.Apple) : row.Apple;
-                overallTotal['One Plus'] += typeof row['One Plus'] === 'string' ? parseFloat(row['One Plus']) : row['One Plus'];
-                overallTotal['Real Me'] += typeof row['Real Me'] === 'string' ? parseFloat(row['Real Me']) : row['Real Me'];
-                overallTotal.Motorola += typeof row.Motorola === 'string' ? parseFloat(row.Motorola) : row.Motorola;
-                overallTotal.Others += typeof row.Others === 'string' ? parseFloat(row.Others) : row.Others;
+                overallTotal.Samsung += parseFloat(row.Samsung) || 0;
+                overallTotal.Vivo += parseFloat(row.Vivo) || 0;
+                overallTotal.Oppo += parseFloat(row.Oppo) || 0;
+                overallTotal.Xiaomi += parseFloat(row.Xiaomi) || 0;
+                overallTotal.Apple += parseFloat(row.Apple) || 0;
+                overallTotal['One Plus'] += parseFloat(row['One Plus']) || 0;
+                overallTotal['Real Me'] += parseFloat(row['Real Me']) || 0;
+                overallTotal.Motorola += parseFloat(row.Motorola) || 0;
+                overallTotal.Others += parseFloat(row.Others) || 0;
             }
         });
 
-        totalSalesVolume = overallTotal.Samsung + overallTotal.Vivo + overallTotal.Oppo + overallTotal.Xiaomi +
-                           overallTotal.Apple + overallTotal['One Plus'] + overallTotal['Real Me'] +
-                           overallTotal.Motorola + overallTotal.Others;
+        totalSalesVolume = Object.values(overallTotal).reduce((sum, value) => sum + value, 0);
 
-        if (showShare === 'true') {
-            totalsRow.Samsung = ((overallTotal.Samsung / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Vivo = ((overallTotal.Vivo / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Oppo = ((overallTotal.Oppo / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Xiaomi = ((overallTotal.Xiaomi / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Apple = ((overallTotal.Apple / totalSalesVolume) * 100).toFixed(2);
-            totalsRow['One Plus'] = ((overallTotal['One Plus'] / totalSalesVolume) * 100).toFixed(2);
-            totalsRow['Real Me'] = ((overallTotal['Real Me'] / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Motorola = ((overallTotal.Motorola / totalSalesVolume) * 100).toFixed(2);
-            totalsRow.Others = ((overallTotal.Others / totalSalesVolume) * 100).toFixed(2);
+        if (showShare === 'true' && totalSalesVolume > 0) {
+            Object.keys(overallTotal).forEach((brand) => {
+                totalsRow[brand] = ((overallTotal[brand] / totalSalesVolume) * 100).toFixed(2);
+            });
         } else {
-            totalsRow.Samsung = overallTotal.Samsung;
-            totalsRow.Vivo = overallTotal.Vivo;
-            totalsRow.Oppo = overallTotal.Oppo;
-            totalsRow.Xiaomi = overallTotal.Xiaomi;
-            totalsRow.Apple = overallTotal.Apple;
-            totalsRow['One Plus'] = overallTotal['One Plus'];
-            totalsRow['Real Me'] = overallTotal['Real Me'];
-            totalsRow.Motorola = overallTotal.Motorola;
-            totalsRow.Others = overallTotal.Others;
+            Object.assign(totalsRow, overallTotal);
         }
 
+        // Determine rank for totals
         const totalsRankData = [
             ['Samsung', totalsRow.Samsung],
             ['Vivo', totalsRow.Vivo],
@@ -1294,6 +1297,8 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
 
 
+
+
 // Helper function to determine price class based on price
 function getPriceClass(price) {
     if (price >= 6000 && price <= 10000) return '6-10k';
@@ -1314,9 +1319,8 @@ function getPriceClass(price) {
 //         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
 
 //         const filter = {};
-//         const samsungFilter = {}; // Specific filter for Samsung's sales data
+//         const samsungFilter = {};
 
-//         // Helper function to format date as "M/D/YYYY"
 //         const formatDate = (date) => {
 //             const d = new Date(date);
 //             const month = d.getMonth() + 1;
@@ -1338,7 +1342,6 @@ function getPriceClass(price) {
 //                 $lte: formatDate(parsedEndDate) 
 //             };
 //         } else {
-//             // Fallback to default dates if not provided (e.g., current month for extraction, previous month for Samsung)
 //             let today = new Date();
 //             let firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 //             let firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -1351,39 +1354,65 @@ function getPriceClass(price) {
 //             };
 //         }
 
-//         // Apply dealerCode and TSE filters
-//         if (dealerCode && dealerCode.length) {
-//             filter.dealerCode = { $in: dealerCode };
-//             samsungFilter['BUYER CODE'] = { $in: dealerCode };
-//         }
+//         // Construct dealer-specific filters dynamically based on the provided filters
+//         const dealerFilters = {};
 //         if (tse && tse.length) {
-//             filter.uploadedBy = { $in: tse };
-//         }
-//         if (type && type.length) {
-//             filter.TYPE = { $in: type };
-//         }
-//         if (area && area.length) {
-//             filter.Area = { $in: area };
-//         }
-//         if (tlName && tlName.length) {
-//             filter['TL NAME'] = { $in: tlName };
-//         }
-//         if (abm && abm.length) {
-//             filter.ABM = { $in: abm };
-//         }
-//         if (ase && ase.length) {
-//             filter.ASE = { $in: ase };
-//         }
-//         if (asm && asm.length) {
-//             filter.ASM = { $in: asm };
-//         }
-//         if (rso && rso.length) {
-//             filter.RSO = { $in: rso };
+//             dealerFilters.TSE = { $in: tse };
 //         }
 //         if (zsm && zsm.length) {
-//             filter.ZSM = { $in: zsm };
+//             dealerFilters.ZSM = { $in: zsm };
+//         }
+//         if (area && area.length) {
+//             dealerFilters.Area = { $in: area };
+//         }
+//         if (tlName && tlName.length) {
+//             dealerFilters['TL NAME'] = { $in: tlName };
+//         }
+//         if (abm && abm.length) {
+//             dealerFilters.ABM = { $in: abm };
+//         }
+//         if (ase && ase.length) {
+//             dealerFilters.ASE = { $in: ase };
+//         }
+//         if (asm && asm.length) {
+//             dealerFilters.ASM = { $in: asm };
+//         }
+//         if (rso && rso.length) {
+//             dealerFilters.RSO = { $in: rso };
+//         }
+//         if (type && type.length) {
+//             dealerFilters.TYPE = { $in: type };
 //         }
 
+//         // Log the dealer filters for debugging
+
+//         // Fetch dealer codes based on the filters from DealerListTseWise
+//         let dealerCodes = [];
+//         if (Object.keys(dealerFilters).length > 0) {
+//             const dealers = await DealerListTseWise.find(dealerFilters).select('Dealer Code -_id');
+//             dealerCodes = dealers.map(dealer => dealer['Dealer Code']);
+//         }
+
+//         // If dealerCode is provided in the request, combine it with the dealerCodes fetched above
+//         if (dealerCode && dealerCode.length) {
+//             dealerCodes = dealerCodes.length ? dealerCodes.filter(code => dealerCode.includes(code)) : dealerCode;
+//         }
+
+//         // Log the final dealer codes used in the filter
+//         // console.log("Final Dealer Codes Applied to Filter:", dealerCodes);
+
+//         // If we have filtered dealer codes, apply them to the main query
+//         if (dealerCodes.length > 0) {
+//             filter.dealerCode = { $in: dealerCodes };
+//             samsungFilter['BUYER CODE'] = { $in: dealerCodes };
+//         }
+
+//         console.log("DEALER CODES: ", dealerCodes)
+
+//         // Log the final filter and samsungFilter
+//         // console.log("Final Filter Object:", filter);
+//         // console.log("Final Samsung Filter:", samsungFilter);
+//         console.log("FilterRrr: ", filter);
 //         // Fetch extraction data for other brands
 //         const extractionRecords = await ExtractionRecord.find(filter)
 //             .populate({ path: 'productId', select: 'Brand Model Price Category' });
@@ -1462,22 +1491,16 @@ function getPriceClass(price) {
 //                 'Rank of Samsung': rankData[priceClass] || 0
 //             };
 
-//             // Calculate total sales/volume for the price class
 //             const totalForPriceClass = rowData.Samsung + rowData.Vivo + rowData.Oppo + rowData.Xiaomi +
 //                                        rowData.Apple + rowData['One Plus'] + rowData['Real Me'] +
 //                                        rowData.Motorola + rowData.Others;
 
-//             // If showShare is true, calculate percentage contribution for each brand
-//             if (showShare === 'true') {
-//                 rowData.Samsung = ((rowData.Samsung / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Vivo = ((rowData.Vivo / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Oppo = ((rowData.Oppo / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Xiaomi = ((rowData.Xiaomi / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Apple = ((rowData.Apple / totalForPriceClass) * 100).toFixed(2);
-//                 rowData['One Plus'] = ((rowData['One Plus'] / totalForPriceClass) * 100).toFixed(2);
-//                 rowData['Real Me'] = ((rowData['Real Me'] / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Motorola = ((rowData.Motorola / totalForPriceClass) * 100).toFixed(2);
-//                 rowData.Others = ((rowData.Others / totalForPriceClass) * 100).toFixed(2);
+//             if (showShare === 'true' && totalForPriceClass > 0) {
+//                 Object.keys(rowData).forEach(brand => {
+//                     if (brand !== 'Price Class' && brand !== 'Rank of Samsung') {
+//                         rowData[brand] = ((rowData[brand] / totalForPriceClass) * 100).toFixed(2);
+//                     }
+//                 });
 //             }
 
 //             return rowData;
@@ -1501,7 +1524,7 @@ function getPriceClass(price) {
 
 //         // Sum the total sales/volume for each brand across all price classes
 //         response.forEach((row) => {
-//             if (row['Price Class'] !== 'Totals') {  // Skip totals row
+//             if (row['Price Class'] !== 'Totals') {
 //                 overallTotal.Samsung += typeof row.Samsung === 'string' ? parseFloat(row.Samsung) : row.Samsung;
 //                 overallTotal.Vivo += typeof row.Vivo === 'string' ? parseFloat(row.Vivo) : row.Vivo;
 //                 overallTotal.Oppo += typeof row.Oppo === 'string' ? parseFloat(row.Oppo) : row.Oppo;
@@ -1514,13 +1537,11 @@ function getPriceClass(price) {
 //             }
 //         });
 
-//         // Calculate the total sales/volume across all brands for the totals row
 //         totalSalesVolume = overallTotal.Samsung + overallTotal.Vivo + overallTotal.Oppo + overallTotal.Xiaomi +
 //                            overallTotal.Apple + overallTotal['One Plus'] + overallTotal['Real Me'] +
 //                            overallTotal.Motorola + overallTotal.Others;
 
 //         if (showShare === 'true') {
-//             // Calculate the share for each brand in the totals row
 //             totalsRow.Samsung = ((overallTotal.Samsung / totalSalesVolume) * 100).toFixed(2);
 //             totalsRow.Vivo = ((overallTotal.Vivo / totalSalesVolume) * 100).toFixed(2);
 //             totalsRow.Oppo = ((overallTotal.Oppo / totalSalesVolume) * 100).toFixed(2);
@@ -1531,7 +1552,6 @@ function getPriceClass(price) {
 //             totalsRow.Motorola = ((overallTotal.Motorola / totalSalesVolume) * 100).toFixed(2);
 //             totalsRow.Others = ((overallTotal.Others / totalSalesVolume) * 100).toFixed(2);
 //         } else {
-//             // Just use the actual values
 //             totalsRow.Samsung = overallTotal.Samsung;
 //             totalsRow.Vivo = overallTotal.Vivo;
 //             totalsRow.Oppo = overallTotal.Oppo;
@@ -1543,7 +1563,6 @@ function getPriceClass(price) {
 //             totalsRow.Others = overallTotal.Others;
 //         }
 
-//         // Calculate rank for Samsung in the totals row
 //         const totalsRankData = [
 //             ['Samsung', totalsRow.Samsung],
 //             ['Vivo', totalsRow.Vivo],
@@ -1572,7 +1591,6 @@ function getPriceClass(price) {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
 
 
 
