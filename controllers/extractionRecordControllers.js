@@ -1290,7 +1290,7 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
         const productFilter = {};
         const dealerFilters = {};
 
-        // Define date ranges for the current and previous month
+        // Date ranges for current and previous months
         const currentStartDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const currentEndDate = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
         const samsungStartDate = new Date(currentStartDate);
@@ -1298,19 +1298,48 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
         const samsungEndDate = new Date(currentEndDate);
         samsungEndDate.setMonth(samsungEndDate.getMonth() - 1);
 
-        // Initial filtering conditions to restrict data to the relevant months
+        // Initial filters for Samsung and non-Samsung data
         const nonSamsungFilter = { date: { $gte: currentStartDate, $lte: currentEndDate } };
         const samsungFilter = {
             'SALES TYPE': 'Sell Out',
-            'MDD NAME': 'Siddha Corporation',
+            'MDD NAME': 'SIDDHA CORPORATION',
             DATE: {
                 $gte: `${samsungStartDate.getMonth() + 1}/1/${samsungStartDate.getFullYear()}`,
                 $lte: `${samsungEndDate.getMonth() + 1}/${samsungEndDate.getDate()}/${samsungEndDate.getFullYear()}`
             }
         };
 
-        // Fetch initial Samsung and non-Samsung data based on month ranges
-        const samsungRecords = await SalesDataMTDW.find(samsungFilter);
+        // Apply `tse` and `dealerCode` filters
+        if (tse && tse.length) {
+            nonSamsungFilter.uploadedBy = { $in: tse };
+            samsungFilter.TSE = { $in: tse };
+        }
+        if (dealerCode && dealerCode.length) {
+            nonSamsungFilter.dealerCode = { $in: dealerCode };
+            samsungFilter['BUYER CODE'] = { $in: dealerCode };
+        }
+
+        // Fetch Samsung data only from `SalesDataMTDW`
+        const samsungRecords = await SalesDataMTDW.find(samsungFilter).select({
+            'MARKET': 1,
+            'MODEL CODE': 1,
+            'Segment Final': 1,
+            'Segment New': 1,
+            'MTD VALUE': 1,
+            'MTD VOLUME': 1,
+            'PRICE BAND': 1
+        });
+
+        // Process Samsung records to include only relevant data
+        const samsungData = samsungRecords.map((record) => ({
+            Brand: 'Samsung',
+            Model: record['MARKET'] || record['MODEL CODE'] || 'N/A',
+            Segment: record['Segment Final'] || record['Segment New'] || 'N/A',
+            Value: parseFloat(record['MTD VALUE']) || 0,
+            Volume: parseFloat(record['MTD VOLUME']) || 0
+        }));
+
+        // Fetch and process non-Samsung products from `ExtractionRecord`
         const nonSamsungProducts = await Product.find(productFilter).select('Brand Model Segment Price');
         const nonSamsungData = await Promise.all(nonSamsungProducts.map(async (product) => {
             const extractionRecords = await ExtractionRecord.find({ productId: product._id, ...nonSamsungFilter });
@@ -1328,33 +1357,18 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
 
         // Combine Samsung and non-Samsung data
         let productData = [
-            ...samsungRecords.map((record) => ({
-                Brand: 'Samsung',
-                Model: record['MARKET'] || record['MODEL CODE'] || 'N/A',
-                Segment: record['Segment Final'] || record['Segment New'] || 'N/A',
-                Value: parseFloat(record['MTD VALUE']) || 0,
-                Volume: parseFloat(record['MTD VOLUME']) || 0
-            })),
+            ...samsungData,
             ...nonSamsungData
         ];
 
-        // Apply brand, segment, and other filters in memory
+        // Apply additional filters on combined data
         productData = productData.filter((item) => {
             if (brand && brand.length && !brand.includes(item.Brand)) return false;
             if (segment && segment.length && !segment.includes(item.Segment)) return false;
-            if (tse && tse.length && !tse.includes(item.TSE)) return false;
-            if (zsm && zsm.length && !zsm.includes(item.ZSM)) return false;
-            if (area && area.length && !area.includes(item.Area)) return false;
-            if (abm && abm.length && !abm.includes(item.ABM)) return false;
-            if (ase && ase.length && !ase.includes(item.ASE)) return false;
-            if (asm && asm.length && !asm.includes(item.ASM)) return false;
-            if (rso && rso.length && !rso.includes(item.RSO)) return false;
-            if (type && type.length && !type.includes(item.TYPE)) return false;
-            if (dealerCode && dealerCode.length && !dealerCode.includes(item.dealerCode)) return false;
             return true;
         });
 
-        // Calculate totalValue and totalVolume if showShare is enabled
+        // Calculate totalValue and totalVolume for shares if enabled
         let totalValue = 0;
         let totalVolume = 0;
         if (showShare === 'true') {
@@ -1362,7 +1376,7 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
             totalVolume = productData.reduce((sum, item) => sum + item.Volume, 0);
         }
 
-        // Convert values to percentage if showShare is enabled
+        // Convert values to percentages if showShare is enabled
         const paginatedData = productData.slice((page - 1) * limit, page * limit).map((item, index) => ({
             serialNumber: (page - 1) * limit + index + 1,
             Brand: item.Brand,
@@ -1392,6 +1406,11 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
 
 
 
+
+
+
+
+
 // Helper function to determine price class based on price
 function getPriceClass(price) {
     if (price >= 6000 && price <= 10000) return '6-10k';
@@ -1406,6 +1425,106 @@ function getPriceClass(price) {
     // if (price <= 40000) return 'Below 40k';
     return null;
 }
+
+// exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
+//     try {
+//         const { startDate, endDate, valueVolume = 'value', brand, segment, area, zsm, rso, asm, ase, abm, tse, dealerCode, type, page = 1, limit = 100, showShare = 'false' } = req.query;
+
+//         const productFilter = {};
+//         const dealerFilters = {};
+
+//         // Define date ranges for the current and previous month
+//         const currentStartDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//         const currentEndDate = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+//         const samsungStartDate = new Date(currentStartDate);
+//         samsungStartDate.setMonth(samsungStartDate.getMonth() - 1);
+//         const samsungEndDate = new Date(currentEndDate);
+//         samsungEndDate.setMonth(samsungEndDate.getMonth() - 1);
+
+//         // Initial filtering conditions to restrict data to the relevant months
+//         const nonSamsungFilter = { date: { $gte: currentStartDate, $lte: currentEndDate } };
+//         const samsungFilter = {
+//             'SALES TYPE': 'Sell Out',
+//             'MDD NAME': 'Siddha Corporation',
+//             DATE: {
+//                 $gte: `${samsungStartDate.getMonth() + 1}/1/${samsungStartDate.getFullYear()}`,
+//                 $lte: `${samsungEndDate.getMonth() + 1}/${samsungEndDate.getDate()}/${samsungEndDate.getFullYear()}`
+//             }
+//         };
+
+//         // Fetch initial Samsung and non-Samsung data based on month ranges
+//         const samsungRecords = await SalesDataMTDW.find(samsungFilter);
+//         const nonSamsungProducts = await Product.find(productFilter).select('Brand Model Segment Price');
+//         const nonSamsungData = await Promise.all(nonSamsungProducts.map(async (product) => {
+//             const extractionRecords = await ExtractionRecord.find({ productId: product._id, ...nonSamsungFilter });
+//             const value = extractionRecords.reduce((sum, record) => sum + (valueVolume === 'value' ? record.totalPrice : record.quantity), 0);
+//             const volume = extractionRecords.reduce((sum, record) => sum + record.quantity, 0);
+
+//             return {
+//                 Brand: product.Brand,
+//                 Model: product.Model,
+//                 Segment: product.Segment || 'N/A',
+//                 Value: value,
+//                 Volume: volume
+//             };
+//         }));
+
+//         // Combine Samsung and non-Samsung data
+//         let productData = [
+//             ...samsungRecords.map((record) => ({
+//                 Brand: 'Samsung',
+//                 Model: record['MARKET'] || record['MODEL CODE'] || 'N/A',
+//                 Segment: record['Segment Final'] || record['Segment New'] || 'N/A',
+//                 Value: parseFloat(record['MTD VALUE']) || 0,
+//                 Volume: parseFloat(record['MTD VOLUME']) || 0
+//             })),
+//             ...nonSamsungData
+//         ];
+
+//         // Apply brand, segment, and other filters in memory
+//         productData = productData.filter((item) => {
+//             if (brand && brand.length && !brand.includes(item.Brand)) return false;
+//             if (segment && segment.length && !segment.includes(item.Segment)) return false;
+//             if (tse && tse.length && !tse.includes(item.TSE)) return false;
+//             if (zsm && zsm.length && !zsm.includes(item.ZSM)) return false;
+//             if (area && area.length && !area.includes(item.Area)) return false;
+//             if (abm && abm.length && !abm.includes(item.ABM)) return false;
+//             if (ase && ase.length && !ase.includes(item.ASE)) return false;
+//             if (asm && asm.length && !asm.includes(item.ASM)) return false;
+//             if (rso && rso.length && !rso.includes(item.RSO)) return false;
+//             if (type && type.length && !type.includes(item.TYPE)) return false;
+//             if (dealerCode && dealerCode.length && !dealerCode.includes(item.dealerCode)) return false;
+//             return true;
+//         });
+
+//         // Calculate totalValue and totalVolume if showShare is enabled
+//         let totalValue = 0;
+//         let totalVolume = 0;
+//         if (showShare === 'true') {
+//             totalValue = productData.reduce((sum, item) => sum + item.Value, 0);
+//             totalVolume = productData.reduce((sum, item) => sum + item.Volume, 0);
+//         }
+
+//         // Convert values to percentage if showShare is enabled
+//         const paginatedData = productData.slice((page - 1) * limit, page * limit).map((item, index) => ({
+//             serialNumber: (page - 1) * limit + index + 1,
+//             Brand: item.Brand,
+//             Model: item.Model,
+//             Value: showShare === 'true' && totalValue > 0 ? ((item.Value / totalValue) * 100).toFixed(2) + '%' : item.Value,
+//             Volume: showShare === 'true' && totalVolume > 0 ? ((item.Volume / totalVolume) * 100).toFixed(2) + '%' : item.Volume,
+//             Segment: item.Segment
+//         }));
+
+//         return res.status(200).json({
+//             totalRecords: productData.length,
+//             data: paginatedData
+//         });
+//     } catch (error) {
+//         console.error('Error in getExtractionDataModelWiseForAdmins:', error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
+
 
 // exports.getExtractionOverviewForAdmins = async (req, res) => {
 //     try {
