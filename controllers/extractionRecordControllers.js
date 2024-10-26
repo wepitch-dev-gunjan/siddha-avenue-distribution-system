@@ -772,7 +772,6 @@ exports.getDealerPerformanceReport = async (req, res) => {
 exports.getUniqueColumnValues = async (req, res) => {
     try {
         const { column } = req.query;
-        // console.log("column: ", column);
 
         if (!column) {
             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
@@ -780,10 +779,8 @@ exports.getUniqueColumnValues = async (req, res) => {
 
         let uniqueValues;
 
-        // Check if the requested column is part of the Product model
         if (column.startsWith('productId.')) {
-            // This means we're querying a field from the Product model, so we need to populate productId
-
+            // Query unique values from the Product model for fields like Brand or Segment
             const aggregationResult = await ExtractionRecord.aggregate([
                 {
                     $lookup: {
@@ -811,13 +808,16 @@ exports.getUniqueColumnValues = async (req, res) => {
 
             uniqueValues = aggregationResult.map((item) => item.uniqueValue);
 
-        } else if ([
-            'type', 'area', 'tlname', 'abm', 'ase', 'asm', 'rso', 'zsm'
-        ].includes(column.toLowerCase())) {
-            // Query distinct values from DealerListTseWise for these specific fields
+            // Include "Samsung" explicitly in the brand list if column is brand
+            if (column === 'productId.Brand' && !uniqueValues.includes("Samsung")) {
+                uniqueValues.unshift("Samsung");
+            }
+
+        } else if (['type', 'area', 'tlname', 'abm', 'ase', 'asm', 'rso', 'zsm'].includes(column.toLowerCase())) {
+            // Query specific columns from the DealerListTseWise model
             uniqueValues = await DealerListTseWise.distinct(column);
         } else {
-            // Query distinct values from ExtractionRecord itself (for other fields)
+            // Query distinct values from ExtractionRecord itself for other fields
             uniqueValues = await ExtractionRecord.distinct(column);
         }
 
@@ -825,7 +825,6 @@ exports.getUniqueColumnValues = async (req, res) => {
             return res.status(200).json({ message: `No unique values found for column: ${column}` });
         }
 
-        // console.log("Column and Unique Values: ", column, uniqueValues);
         return res.status(200).json({ uniqueValues });
 
     } catch (error) {
@@ -1284,12 +1283,133 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
     }
 };
 
+exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
+    try {
+        const { startDate, endDate, valueVolume = 'value', brand, segment, area, zsm, rso, asm, ase, abm, tse, dealerCode, type, page = 1, limit = 100, showShare = 'false' } = req.query;
 
+        const productFilter = {};
+        const dealerFilters = {};
 
+        // Date filtering logic
+        const currentStartDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const currentEndDate = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
 
+        const samsungStartDate = new Date(currentStartDate);
+        samsungStartDate.setMonth(samsungStartDate.getMonth() - 1);
 
+        const samsungEndDate = new Date(currentEndDate);
+        samsungEndDate.setMonth(samsungEndDate.getMonth() - 1);
 
+        // Define common brand filters
+        const brandFilter = brand && brand.length ? brand : [];
+        
+        // Create filter objects for non-Samsung and Samsung data
+        const nonSamsungFilter = {
+            date: { $gte: currentStartDate, $lte: currentEndDate }
+        };
+        const samsungFilter = {
+            'SALES TYPE': 'Sell Out',
+            'MDD NAME': 'Siddha Corporation',
+            DATE: {
+                $gte: `${samsungStartDate.getMonth() + 1}/1/${samsungStartDate.getFullYear()}`,
+                $lte: `${samsungEndDate.getMonth() + 1}/${samsungEndDate.getDate()}/${samsungEndDate.getFullYear()}`
+            }
+        };
 
+        // Apply Brand and Segment Filters
+        if (brandFilter.includes("Samsung")) {
+            samsungFilter['Brand'] = "Samsung"; // Explicitly filter for Samsung brand in SalesDataMTDW
+        }
+        if (brandFilter.length && !brandFilter.includes("Samsung")) {
+            productFilter.Brand = { $in: brandFilter };
+        }
+        if (segment && segment.length) {
+            productFilter.Segment = { $in: segment };
+        }
+
+        // Apply additional filters to dealerFilters
+        if (tse && tse.length) dealerFilters.TSE = { $in: tse };
+        if (zsm && zsm.length) dealerFilters.ZSM = { $in: zsm };
+        if (area && area.length) dealerFilters.Area = { $in: area };
+        if (abm && abm.length) dealerFilters.ABM = { $in: abm };
+        if (ase && ase.length) dealerFilters.ASE = { $in: ase };
+        if (asm && asm.length) dealerFilters.ASM = { $in: asm };
+        if (rso && rso.length) dealerFilters.RSO = { $in: rso };
+        if (type && type.length) dealerFilters.TYPE = { $in: type };
+
+        // Fetch dealer codes based on filters from DealerListTseWise
+        let dealerCodes = [];
+        if (Object.keys(dealerFilters).length > 0) {
+            const dealers = await DealerListTseWise.find(dealerFilters).select({ 'Dealer Code': 1 });
+            dealerCodes = dealers.map(dealer => dealer['Dealer Code']);
+        }
+        if (dealerCode && dealerCode.length) {
+            dealerCodes = dealerCodes.length ? dealerCodes.filter(code => dealerCode.includes(code)) : dealerCode;
+        }
+        if (dealerCodes.length > 0) {
+            nonSamsungFilter.dealerCode = { $in: dealerCodes };
+            samsungFilter['BUYER CODE'] = { $in: dealerCodes };
+        }
+
+        // Fetch non-Samsung data from ExtractionRecord
+        const products = await Product.find(productFilter).select('Brand Model Segment Price');
+        const nonSamsungData = await Promise.all(products.map(async (product) => {
+            const extractionRecords = await ExtractionRecord.find({ productId: product._id, ...nonSamsungFilter });
+            const value = extractionRecords.reduce((sum, record) => sum + (valueVolume === 'value' ? record.totalPrice : record.quantity), 0);
+            const volume = extractionRecords.reduce((sum, record) => sum + record.quantity, 0);
+
+            return {
+                Brand: product.Brand,
+                Model: product.Model,
+                Segment: product.Segment || 'N/A',
+                Value: value,
+                Volume: volume
+            };
+        }));
+
+        // Fetch Samsung data from SalesDataMTDW if "Samsung" is selected or no brand filter is applied
+        let samsungData = [];
+        if (!brandFilter.length || brandFilter.includes("Samsung")) {
+            const samsungRecords = await SalesDataMTDW.find(samsungFilter);
+            samsungData = samsungRecords.map((record) => ({
+                Brand: 'Samsung',
+                Model: record['MARKET'] || record['MODEL CODE'] || 'N/A',
+                Segment: record['Segment Final'] || record['Segment New'] || 'N/A',
+                Value: parseFloat(record['MTD VALUE']) || 0,
+                Volume: parseFloat(record['MTD VOLUME']) || 0
+            }));
+        }
+
+        // Merge Samsung and non-Samsung data
+        const productData = [...samsungData, ...nonSamsungData];
+
+        // Calculate totalValue and totalVolume if showShare is enabled
+        let totalValue = 0;
+        let totalVolume = 0;
+        if (showShare === 'true') {
+            totalValue = productData.reduce((sum, item) => sum + item.Value, 0);
+            totalVolume = productData.reduce((sum, item) => sum + item.Volume, 0);
+        }
+
+        // Convert values to percentage if showShare is enabled
+        const paginatedData = productData.slice((page - 1) * limit, page * limit).map((item, index) => ({
+            serialNumber: (page - 1) * limit + index + 1,
+            Brand: item.Brand,
+            Model: item.Model,
+            Value: showShare === 'true' && totalValue > 0 ? ((item.Value / totalValue) * 100).toFixed(2) + '%' : item.Value,
+            Volume: showShare === 'true' && totalVolume > 0 ? ((item.Volume / totalVolume) * 100).toFixed(2) + '%' : item.Volume,
+            Segment: item.Segment
+        }));
+
+        return res.status(200).json({
+            totalRecords: productData.length,
+            data: paginatedData
+        });
+    } catch (error) {
+        console.error('Error in getExtractionDataModelWiseForAdmins:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
 
 
 
