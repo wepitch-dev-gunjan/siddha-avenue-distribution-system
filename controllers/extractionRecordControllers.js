@@ -1043,6 +1043,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             // General filter applies the provided date range
             filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
 
+
             // For Samsung, match the same day range in the previous month
             const previousMonthStart = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth() - 1, parsedStartDate.getDate());
             const previousMonthEnd = new Date(parsedEndDate.getFullYear(), parsedEndDate.getMonth() - 1, parsedEndDate.getDate());
@@ -1169,7 +1170,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
         // Fetch Samsung's sales data from SalesDataMTDW
         samsungFilter['SALES TYPE'] = 'Sell Out';
-        samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
+        // samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
         console.log("Samsung filter jb: ", samsungFilter);
         const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
 
@@ -1568,7 +1569,7 @@ function getPriceClass(price) {
 
 //         // Initialize price classes and brands
 //         const priceClasses = {
-//             '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
+//             '<6k': {}, '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
 //             '40-70k': {}, '70-100k': {}, '100k': {}, 
 //         };
 //         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'Realme', 'Motorola', 'Others'];
@@ -1725,7 +1726,6 @@ function getPriceClass(price) {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
 
 
 
