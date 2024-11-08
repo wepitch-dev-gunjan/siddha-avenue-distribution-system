@@ -1139,7 +1139,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
 
         // Initialize price classes and brands
         const priceClasses = {
-            '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
+            '<6k': {}, '6-10k': {}, '10-15k': {}, '15-20k': {}, '20-30k': {}, '30-40k': {},
             '40-70k': {}, '70-100k': {}, '100k': {}, 
         };
         const brands = ['Samsung', 'Vivo', 'Oppo', 'Xiaomi', 'Apple', 'OnePlus', 'Realme', 'Motorola', 'Others'];
@@ -1170,7 +1170,7 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         // Fetch Samsung's sales data from SalesDataMTDW
         samsungFilter['SALES TYPE'] = 'Sell Out';
         samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
-
+        console.log("Samsung filter jb: ", samsungFilter);
         const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
 
         // Process Samsung's sales data
@@ -1427,6 +1427,7 @@ exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
 
 // Helper function to determine price class based on price
 function getPriceClass(price) {
+    if (price < 6000) return '<6k';
     if (price >= 6000 && price <= 10000) return '6-10k';
     if (price > 10000 && price <= 15000) return '10-15k';
     if (price > 15000 && price <= 20000) return '15-20k';
@@ -1440,109 +1441,12 @@ function getPriceClass(price) {
     return null;
 }
 
-// exports.getExtractionDataModelWiseForAdmins = async (req, res) => {
-//     try {
-//         const { startDate, endDate, valueVolume = 'value', brand, segment, area, zsm, rso, asm, ase, abm, tse, dealerCode, type, page = 1, limit = 100, showShare = 'false' } = req.query;
-
-//         const productFilter = {};
-//         const dealerFilters = {};
-
-//         // Define date ranges for the current and previous month
-//         const currentStartDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-//         const currentEndDate = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-//         const samsungStartDate = new Date(currentStartDate);
-//         samsungStartDate.setMonth(samsungStartDate.getMonth() - 1);
-//         const samsungEndDate = new Date(currentEndDate);
-//         samsungEndDate.setMonth(samsungEndDate.getMonth() - 1);
-
-//         // Initial filtering conditions to restrict data to the relevant months
-//         const nonSamsungFilter = { date: { $gte: currentStartDate, $lte: currentEndDate } };
-//         const samsungFilter = {
-//             'SALES TYPE': 'Sell Out',
-//             'MDD NAME': 'Siddha Corporation',
-//             DATE: {
-//                 $gte: `${samsungStartDate.getMonth() + 1}/1/${samsungStartDate.getFullYear()}`,
-//                 $lte: `${samsungEndDate.getMonth() + 1}/${samsungEndDate.getDate()}/${samsungEndDate.getFullYear()}`
-//             }
-//         };
-
-//         // Fetch initial Samsung and non-Samsung data based on month ranges
-//         const samsungRecords = await SalesDataMTDW.find(samsungFilter);
-//         const nonSamsungProducts = await Product.find(productFilter).select('Brand Model Segment Price');
-//         const nonSamsungData = await Promise.all(nonSamsungProducts.map(async (product) => {
-//             const extractionRecords = await ExtractionRecord.find({ productId: product._id, ...nonSamsungFilter });
-//             const value = extractionRecords.reduce((sum, record) => sum + (valueVolume === 'value' ? record.totalPrice : record.quantity), 0);
-//             const volume = extractionRecords.reduce((sum, record) => sum + record.quantity, 0);
-
-//             return {
-//                 Brand: product.Brand,
-//                 Model: product.Model,
-//                 Segment: product.Segment || 'N/A',
-//                 Value: value,
-//                 Volume: volume
-//             };
-//         }));
-
-//         // Combine Samsung and non-Samsung data
-//         let productData = [
-//             ...samsungRecords.map((record) => ({
-//                 Brand: 'Samsung',
-//                 Model: record['MARKET'] || record['MODEL CODE'] || 'N/A',
-//                 Segment: record['Segment Final'] || record['Segment New'] || 'N/A',
-//                 Value: parseFloat(record['MTD VALUE']) || 0,
-//                 Volume: parseFloat(record['MTD VOLUME']) || 0
-//             })),
-//             ...nonSamsungData
-//         ];
-
-//         // Apply brand, segment, and other filters in memory
-//         productData = productData.filter((item) => {
-//             if (brand && brand.length && !brand.includes(item.Brand)) return false;
-//             if (segment && segment.length && !segment.includes(item.Segment)) return false;
-//             if (tse && tse.length && !tse.includes(item.TSE)) return false;
-//             if (zsm && zsm.length && !zsm.includes(item.ZSM)) return false;
-//             if (area && area.length && !area.includes(item.Area)) return false;
-//             if (abm && abm.length && !abm.includes(item.ABM)) return false;
-//             if (ase && ase.length && !ase.includes(item.ASE)) return false;
-//             if (asm && asm.length && !asm.includes(item.ASM)) return false;
-//             if (rso && rso.length && !rso.includes(item.RSO)) return false;
-//             if (type && type.length && !type.includes(item.TYPE)) return false;
-//             if (dealerCode && dealerCode.length && !dealerCode.includes(item.dealerCode)) return false;
-//             return true;
-//         });
-
-//         // Calculate totalValue and totalVolume if showShare is enabled
-//         let totalValue = 0;
-//         let totalVolume = 0;
-//         if (showShare === 'true') {
-//             totalValue = productData.reduce((sum, item) => sum + item.Value, 0);
-//             totalVolume = productData.reduce((sum, item) => sum + item.Volume, 0);
-//         }
-
-//         // Convert values to percentage if showShare is enabled
-//         const paginatedData = productData.slice((page - 1) * limit, page * limit).map((item, index) => ({
-//             serialNumber: (page - 1) * limit + index + 1,
-//             Brand: item.Brand,
-//             Model: item.Model,
-//             Value: showShare === 'true' && totalValue > 0 ? ((item.Value / totalValue) * 100).toFixed(2) + '%' : item.Value,
-//             Volume: showShare === 'true' && totalVolume > 0 ? ((item.Volume / totalVolume) * 100).toFixed(2) + '%' : item.Volume,
-//             Segment: item.Segment
-//         }));
-
-//         return res.status(200).json({
-//             totalRecords: productData.length,
-//             data: paginatedData
-//         });
-//     } catch (error) {
-//         console.error('Error in getExtractionDataModelWiseForAdmins:', error);
-//         return res.status(500).json({ error: 'Internal Server Error' });
-//     }
-// };
-
 
 // exports.getExtractionOverviewForAdmins = async (req, res) => {
 //     try {
 //         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
+
+//         console.log("Start date, end date: ", startDate, endDate);
 
 //         const filter = {};
 //         const samsungFilter = {};
@@ -1555,30 +1459,42 @@ function getPriceClass(price) {
 //             return `${month}/${day}/${year}`;
 //         };
 
-//         // Apply date range filter
+//         // Apply date range filter for general data
 //         if (startDate && endDate) {
 //             const parsedStartDate = new Date(startDate);
 //             const parsedEndDate = new Date(endDate);
+            
+//             // Validate date range
 //             if (parsedStartDate > parsedEndDate) {
 //                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
 //             }
+            
+//             // General filter applies the provided date range
 //             filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
+
+//             // For Samsung, match the same day range in the previous month
+//             const previousMonthStart = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth() - 1, parsedStartDate.getDate());
+//             const previousMonthEnd = new Date(parsedEndDate.getFullYear(), parsedEndDate.getMonth() - 1, parsedEndDate.getDate());
+            
 //             samsungFilter.DATE = { 
-//                 $gte: formatDate(parsedStartDate), 
-//                 $lte: formatDate(parsedEndDate) 
+//                 $gte: formatDate(previousMonthStart), 
+//                 $lte: formatDate(previousMonthEnd) 
 //             };
+//             console.log("Samsung filter date (previous month same days): ", samsungFilter.DATE);
 //         } else {
+//             // Default behavior when no dates are provided
 //             let today = new Date();
 //             let firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 //             let firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
 //             let lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-
+            
 //             filter.date = { $gte: firstDayOfCurrentMonth };
 //             samsungFilter.DATE = { 
 //                 $gte: formatDate(firstDayOfPreviousMonth), 
 //                 $lte: formatDate(lastDayOfPreviousMonth) 
 //             };
 //         }
+
 
 //         // Construct dealer-specific filters dynamically based on the provided filters
 //         const dealerFilters = {};
@@ -1610,35 +1526,42 @@ function getPriceClass(price) {
 //             dealerFilters.TYPE = { $in: type };
 //         }
 
-//         // Log the dealer filters for debugging
+//         console.log("Dealer Filters: ", dealerFilters);
 
-//         // Fetch dealer codes based on the filters from DealerListTseWise
+//         // Fetch dealer codes based on the combined filters from DealerListTseWise
+//         // Fetch dealer codes based on the combined filters from DealerListTseWise
 //         let dealerCodes = [];
 //         if (Object.keys(dealerFilters).length > 0) {
-//             const dealers = await DealerListTseWise.find(dealerFilters).select('Dealer Code -_id');
+//             // Use bracket notation to select 'Dealer Code'
+//             const dealers = await DealerListTseWise.find(dealerFilters).select({ 'Dealer Code': 1 });
+//             console.log("Dealers fetched:", dealers); // Log the full dealer objects to check the structure
+
+//             // Inspect the structure of a single dealer object
+//             if (dealers.length > 0) {
+//                 console.log("Example dealer object:", dealers[0]);
+//             }
+
+//             // Map the dealer codes using bracket notation
 //             dealerCodes = dealers.map(dealer => dealer['Dealer Code']);
 //         }
+
+//         console.log("Dealer codes filtered: ", dealerCodes);
+
+
+
+//         // console.log("Dealers: ", dealers);
 
 //         // If dealerCode is provided in the request, combine it with the dealerCodes fetched above
 //         if (dealerCode && dealerCode.length) {
 //             dealerCodes = dealerCodes.length ? dealerCodes.filter(code => dealerCode.includes(code)) : dealerCode;
 //         }
 
-//         // Log the final dealer codes used in the filter
-//         // console.log("Final Dealer Codes Applied to Filter:", dealerCodes);
-
-//         // If we have filtered dealer codes, apply them to the main query
+//         // Apply the filtered dealer codes to the main query
 //         if (dealerCodes.length > 0) {
 //             filter.dealerCode = { $in: dealerCodes };
 //             samsungFilter['BUYER CODE'] = { $in: dealerCodes };
 //         }
 
-//         console.log("DEALER CODES: ", dealerCodes)
-
-//         // Log the final filter and samsungFilter
-//         // console.log("Final Filter Object:", filter);
-//         // console.log("Final Samsung Filter:", samsungFilter);
-//         console.log("FilterRrr: ", filter);
 //         // Fetch extraction data for other brands
 //         const extractionRecords = await ExtractionRecord.find(filter)
 //             .populate({ path: 'productId', select: 'Brand Model Price Category' });
@@ -1676,7 +1599,7 @@ function getPriceClass(price) {
 //         // Fetch Samsung's sales data from SalesDataMTDW
 //         samsungFilter['SALES TYPE'] = 'Sell Out';
 //         samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
-
+//         console.log("Samsung filter jb: ", samsungFilter);
 //         const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
 
 //         // Process Samsung's sales data
@@ -1738,7 +1661,7 @@ function getPriceClass(price) {
 //             response = response.filter((row) => normalizedSegments.includes(row['Price Class'].toLowerCase()));
 //         }
 
-//         // Add totals row (for actual values or share if showShare is true)
+//         // Add totals row
 //         const totalsRow = {
 //             'Price Class': 'Totals',
 //             Samsung: 0, Vivo: 0, Oppo: 0, Xiaomi: 0, Apple: 0, 'One Plus': 0, 'Real Me': 0, Motorola: 0, Others: 0,
@@ -1751,44 +1674,29 @@ function getPriceClass(price) {
 //         // Sum the total sales/volume for each brand across all price classes
 //         response.forEach((row) => {
 //             if (row['Price Class'] !== 'Totals') {
-//                 overallTotal.Samsung += typeof row.Samsung === 'string' ? parseFloat(row.Samsung) : row.Samsung;
-//                 overallTotal.Vivo += typeof row.Vivo === 'string' ? parseFloat(row.Vivo) : row.Vivo;
-//                 overallTotal.Oppo += typeof row.Oppo === 'string' ? parseFloat(row.Oppo) : row.Oppo;
-//                 overallTotal.Xiaomi += typeof row.Xiaomi === 'string' ? parseFloat(row.Xiaomi) : row.Xiaomi;
-//                 overallTotal.Apple += typeof row.Apple === 'string' ? parseFloat(row.Apple) : row.Apple;
-//                 overallTotal['One Plus'] += typeof row['One Plus'] === 'string' ? parseFloat(row['One Plus']) : row['One Plus'];
-//                 overallTotal['Real Me'] += typeof row['Real Me'] === 'string' ? parseFloat(row['Real Me']) : row['Real Me'];
-//                 overallTotal.Motorola += typeof row.Motorola === 'string' ? parseFloat(row.Motorola) : row.Motorola;
-//                 overallTotal.Others += typeof row.Others === 'string' ? parseFloat(row.Others) : row.Others;
+//                 overallTotal.Samsung += parseFloat(row.Samsung) || 0;
+//                 overallTotal.Vivo += parseFloat(row.Vivo) || 0;
+//                 overallTotal.Oppo += parseFloat(row.Oppo) || 0;
+//                 overallTotal.Xiaomi += parseFloat(row.Xiaomi) || 0;
+//                 overallTotal.Apple += parseFloat(row.Apple) || 0;
+//                 overallTotal['One Plus'] += parseFloat(row['One Plus']) || 0;
+//                 overallTotal['Real Me'] += parseFloat(row['Real Me']) || 0;
+//                 overallTotal.Motorola += parseFloat(row.Motorola) || 0;
+//                 overallTotal.Others += parseFloat(row.Others) || 0;
 //             }
 //         });
 
-//         totalSalesVolume = overallTotal.Samsung + overallTotal.Vivo + overallTotal.Oppo + overallTotal.Xiaomi +
-//                            overallTotal.Apple + overallTotal['One Plus'] + overallTotal['Real Me'] +
-//                            overallTotal.Motorola + overallTotal.Others;
+//         totalSalesVolume = Object.values(overallTotal).reduce((sum, value) => sum + value, 0);
 
-//         if (showShare === 'true') {
-//             totalsRow.Samsung = ((overallTotal.Samsung / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Vivo = ((overallTotal.Vivo / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Oppo = ((overallTotal.Oppo / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Xiaomi = ((overallTotal.Xiaomi / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Apple = ((overallTotal.Apple / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow['One Plus'] = ((overallTotal['One Plus'] / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow['Real Me'] = ((overallTotal['Real Me'] / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Motorola = ((overallTotal.Motorola / totalSalesVolume) * 100).toFixed(2);
-//             totalsRow.Others = ((overallTotal.Others / totalSalesVolume) * 100).toFixed(2);
+//         if (showShare === 'true' && totalSalesVolume > 0) {
+//             Object.keys(overallTotal).forEach((brand) => {
+//                 totalsRow[brand] = ((overallTotal[brand] / totalSalesVolume) * 100).toFixed(2);
+//             });
 //         } else {
-//             totalsRow.Samsung = overallTotal.Samsung;
-//             totalsRow.Vivo = overallTotal.Vivo;
-//             totalsRow.Oppo = overallTotal.Oppo;
-//             totalsRow.Xiaomi = overallTotal.Xiaomi;
-//             totalsRow.Apple = overallTotal.Apple;
-//             totalsRow['One Plus'] = overallTotal['One Plus'];
-//             totalsRow['Real Me'] = overallTotal['Real Me'];
-//             totalsRow.Motorola = overallTotal.Motorola;
-//             totalsRow.Others = overallTotal.Others;
+//             Object.assign(totalsRow, overallTotal);
 //         }
 
+//         // Determine rank for totals
 //         const totalsRankData = [
 //             ['Samsung', totalsRow.Samsung],
 //             ['Vivo', totalsRow.Vivo],
@@ -1817,8 +1725,6 @@ function getPriceClass(price) {
 //         return res.status(500).json({ error: 'Internal Server Error' });
 //     }
 // };
-
-
 
 
 
