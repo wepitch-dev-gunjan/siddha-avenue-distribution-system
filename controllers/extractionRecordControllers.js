@@ -1017,6 +1017,8 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
     try {
         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
 
+        console.log("Start date, end date: ", startDate, endDate);
+
         const filter = {};
         const samsungFilter = {};
 
@@ -1028,30 +1030,42 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             return `${month}/${day}/${year}`;
         };
 
-        // Apply date range filter
+        // Apply date range filter for general data
         if (startDate && endDate) {
             const parsedStartDate = new Date(startDate);
             const parsedEndDate = new Date(endDate);
+            
+            // Validate date range
             if (parsedStartDate > parsedEndDate) {
                 return res.status(400).json({ error: 'Start date must be before or equal to end date.' });
             }
+            
+            // General filter applies the provided date range
             filter.date = { $gte: parsedStartDate, $lte: parsedEndDate };
+
+            // For Samsung, match the same day range in the previous month
+            const previousMonthStart = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth() - 1, parsedStartDate.getDate());
+            const previousMonthEnd = new Date(parsedEndDate.getFullYear(), parsedEndDate.getMonth() - 1, parsedEndDate.getDate());
+            
             samsungFilter.DATE = { 
-                $gte: formatDate(parsedStartDate), 
-                $lte: formatDate(parsedEndDate) 
+                $gte: formatDate(previousMonthStart), 
+                $lte: formatDate(previousMonthEnd) 
             };
+            console.log("Samsung filter date (previous month same days): ", samsungFilter.DATE);
         } else {
+            // Default behavior when no dates are provided
             let today = new Date();
             let firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             let firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
             let lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-
+            
             filter.date = { $gte: firstDayOfCurrentMonth };
             samsungFilter.DATE = { 
                 $gte: formatDate(firstDayOfPreviousMonth), 
                 $lte: formatDate(lastDayOfPreviousMonth) 
             };
         }
+
 
         // Construct dealer-specific filters dynamically based on the provided filters
         const dealerFilters = {};
