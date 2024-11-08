@@ -1172,7 +1172,28 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         samsungFilter['SALES TYPE'] = 'Sell Out';
         // samsungFilter['SELLER NAME'] = 'SIDDHA CORPORATION';
         console.log("Samsung filter jb: ", samsungFilter);
-        const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
+        // const samsungSalesData = await SalesDataMTDW.find(samsungFilter);
+
+        const samsungSalesData = await SalesDataMTDW.aggregate([
+            {
+                $addFields: {
+                    parsedDate: {
+                        $dateFromString: {
+                            dateString: "$DATE",
+                            format: "%m/%d/%Y",
+                            timezone: "UTC"
+                        }
+                    }
+                }
+            },
+            { 
+                $match: {
+                    parsedDate: { $gte: new Date("2024-09-01"), $lte: new Date("2024-09-30") },
+                    "SALES TYPE": "Sell Out"
+                }
+            }
+        ]);
+        
 
         // Process Samsung's sales data
         samsungSalesData.forEach((record) => {
