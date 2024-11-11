@@ -1224,7 +1224,8 @@ const samsungSalesData = await SalesDataMTDW.aggregate([
     { 
         $match: {
             DATE: { $gte: samsungStartDate, $lte: samsungEndDate },  // Apply adjusted range for Samsung
-            "SALES TYPE": "Sell Out"
+            "SALES TYPE": "Sell Out",
+            "BUYER CODE": { $in: dealerCodes }
         }
     }
 ]);
