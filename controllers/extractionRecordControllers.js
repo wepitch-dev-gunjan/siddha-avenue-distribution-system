@@ -1204,11 +1204,6 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                     }
                 });
 
-                // const rankData = Object.entries(row)
-                //     .filter(([brand]) => brand !== 'Price Class' && brand !== 'Rank of Samsung')
-                //     .sort(([, a], [, b]) => b - a);
-
-                // row['Rank of Samsung'] = rankData.findIndex(([brand]) => brand === 'Samsung') + 1;
             });
 
 
@@ -1219,15 +1214,12 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
             });
         }
 
+        response.push(rawTotalsRow);
+
         response.forEach((row) => {
-            console.log('rech');
             const rankData = Object.entries(row).filter(([brand]) => brand !== 'Price Class' && brand !== 'Rank of Samsung').sort(([, a], [, b]) => b - a);
             row['Rank of Samsung'] = rankData.findIndex(([brand]) => brand === 'Samsung') + 1;
         })
-
-
-
-        response.push(rawTotalsRow);
 
         return res.status(200).json({
             totalRecords: response.length,
