@@ -6,6 +6,7 @@ const Dealer = require('../models/Dealer');
 const Product = require("../models/Product");
 const SalesDataMTDW = require("../models/SalesDataMTDW");
 const DealerListTseWise = require('../models/DealerListTseWise');
+const User = require('../models/User');
 
 const { BACKEND_URL } = process.env;
 
@@ -772,6 +773,7 @@ exports.getDealerPerformanceReport = async (req, res) => {
 exports.getUniqueColumnValues = async (req, res) => {
     try {
         const { column } = req.query;
+        console.log("Column: ", column);
 
         if (!column) {
             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
@@ -779,7 +781,25 @@ exports.getUniqueColumnValues = async (req, res) => {
 
         let uniqueValues;
 
-        if (column.startsWith('productId.')) {
+        if (column === 'uploadedBy'){
+            
+            const uploadedByCodes = await ExtractionRecord.distinct('uploadedBy');
+
+            if (!uploadedByCodes || uploadedByCodes.length === 0) {
+                return res.status(200).json({message: "No uploadedBy codes found!!"});
+            }
+
+            const employees = await User.find({ code: {$in: uploadedByCodes} }, { name: 1, code: 1, _id: 0 });
+
+
+            uniqueValues = uploadedByCodes.map(code => {
+                const employee = employees.find(emp => emp.code === code);
+                return employee ? employee.name : code;
+            })
+
+            console.log("TSEs: ", uniqueValues)
+
+        } else if (column.startsWith('productId.')) {
             // Query unique values from the Product model for fields like Brand or Segment
             const aggregationResult = await ExtractionRecord.aggregate([
                 {
@@ -834,65 +854,6 @@ exports.getUniqueColumnValues = async (req, res) => {
 };
 
 
-// exports.getUniqueColumnValues = async (req, res) => {
-//     try {
-//         const { column } = req.query;
-//         console.log("column: ", column);
-
-//         if (!column) {
-//             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
-//         }
-
-//         let uniqueValues;
-
-//         // Check if the requested column is part of the Product model
-//         if (column.startsWith('productId.')) {
-//             // This means we're querying a field from the Product model, so we need to populate productId
-
-//             // Use MongoDB aggregation to get distinct values from the populated productId fields
-//             const aggregationResult = await ExtractionRecord.aggregate([
-//                 {
-//                     $lookup: {
-//                         from: 'products', // Name of the Product collection
-//                         localField: 'productId',
-//                         foreignField: '_id',
-//                         as: 'productInfo'
-//                     }
-//                 },
-//                 {
-//                     $unwind: '$productInfo' // Flatten the populated productInfo array
-//                 },
-//                 {
-//                     $group: {
-//                         _id: `$productInfo.${column.split('.')[1]}`, // Group by the requested field (e.g., Brand)
-//                     }
-//                 },
-//                 {
-//                     $project: {
-//                         _id: 0, // Exclude the _id field from the result
-//                         uniqueValue: '$_id' // Store the distinct field value in a new field
-//                     }
-//                 }
-//             ]);
-
-//             uniqueValues = aggregationResult.map((item) => item.uniqueValue);
-
-//         } else {
-//             // Query distinct values from ExtractionRecord itself (for non-product fields)
-//             uniqueValues = await ExtractionRecord.distinct(column);
-//         }
-
-//         if (!uniqueValues || uniqueValues.length === 0) {
-//             return res.status(200).json({ message: `No unique values found for column: ${column}` });
-//         }
-//         console.log("Column and Unique Values: ", column, uniqueValues);
-//         return res.status(200).json({ uniqueValues });
-
-//     } catch (error) {
-//         console.error(error);
-//         return res.status(500).json({ error: 'Internal Server Error' });
-//     }
-// };
 
 exports.getExtractionDataForAdminWithFilters = async (req, res) => {
     try {
@@ -1017,6 +978,16 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
 
         console.log("Start date, end date: ", startDate, endDate, showShare);
+        console.log("dealerCode: ", dealerCode);
+        console.log("TSE: ", tse);
+        console.log("Type: ", type);
+        console.log("Area: ", area);
+        console.log("tlName: ", tlName);
+        console.log("ABM: ", abm);
+        console.log("ASE", ase);
+        console.log("ASM: ", asm);
+        console.log("RSO: ", rso);
+        console.log("ZSM: ", zsm);
 
         const filter = {};
         const samsungFilter = {};
@@ -1620,7 +1591,70 @@ function getPriceClass(price) {
 
 
 
+// exports.getUniqueColumnValues = async (req, res) => {
+//     try {
+//         const { column } = req.query;
+//         console.log("Column: ", column);
 
+//         if (!column) {
+//             return res.status(400).json({ error: 'Please specify a column to fetch unique values.' });
+//         }
+
+//         let uniqueValues;
+
+//         if (column.startsWith('productId.')) {
+//             // Query unique values from the Product model for fields like Brand or Segment
+//             const aggregationResult = await ExtractionRecord.aggregate([
+//                 {
+//                     $lookup: {
+//                         from: 'products',
+//                         localField: 'productId',
+//                         foreignField: '_id',
+//                         as: 'productInfo'
+//                     }
+//                 },
+//                 {
+//                     $unwind: '$productInfo'
+//                 },
+//                 {
+//                     $group: {
+//                         _id: `$productInfo.${column.split('.')[1]}`,
+//                     }
+//                 },
+//                 {
+//                     $project: {
+//                         _id: 0,
+//                         uniqueValue: '$_id'
+//                     }
+//                 }
+//             ]);
+
+//             uniqueValues = aggregationResult.map((item) => item.uniqueValue);
+
+//             // Include "Samsung" explicitly in the brand list if column is brand
+//             if (column === 'productId.Brand' && !uniqueValues.includes("Samsung")) {
+//                 uniqueValues.unshift("Samsung");
+//             }
+
+//         } else if (['type', 'area', 'tlname', 'abm', 'ase', 'asm', 'rso', 'zsm'].includes(column.toLowerCase())) {
+//             // Query specific columns from the DealerListTseWise model
+//             uniqueValues = await DealerListTseWise.distinct(column);
+//         } else {
+//             // Query distinct values from ExtractionRecord itself for other fields
+//             uniqueValues = await ExtractionRecord.distinct(column);
+//         }
+
+//         if (!uniqueValues || uniqueValues.length === 0) {
+//             return res.status(200).json({ message: `No unique values found for column: ${column}` });
+//         }
+
+//         return res.status(200).json({ uniqueValues });
+
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// };
 
 
 
