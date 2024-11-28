@@ -89,6 +89,8 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
   try {
     let { code } = req;
     let { td_format, start_date, end_date, data_format } = req.query;
+    console.log("Start date, end date, td_format, data_format: ", start_date, end_date, td_format, data_format);
+
 
     // Validate that employee code is provided
     if (!code) {
@@ -117,6 +119,9 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
 
     startDate = new Date(startDate.toLocaleDateString('en-US'));
     endDate = new Date(endDate.toLocaleDateString('en-US'));
+    endDate.setUTCHours(23, 59, 59, 59);
+    console.log("endDate: ", endDate);
+
 
     const startYear = startDate.getFullYear();
     const startMonth = startDate.getMonth() + 1; // Month is zero-based
@@ -124,10 +129,18 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     const endMonth = endDate.getMonth() + 1; // Month is zero-based
     const presentDayOfMonth = endDate.getDate();
 
+    const currentMonthStartDate = new Date(endDate.getFullYear(), endDate.getMonth(), 2);
+    currentMonthStartDate.setUTCHours(0, 0, 0, 0);
+
+    const endDateForThisMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 2);
+    endDateForThisMonth.setUTCHours(0, 0, 0, 0);
+    console.log("currentMonthStartDate: ", currentMonthStartDate);
+    console.log("endDateForThisMonth: ", endDateForThisMonth);
+ 
     let matchStage = {
       parsedDate: {
-        $gte: startDate,
-        $lte: endDate
+        $gte: currentMonthStartDate,
+        $lt: endDateForThisMonth
       },
       [position]: name
     };
@@ -143,7 +156,7 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
               $dateFromString: {
                 dateString: "$DATE",
                 format: "%m/%d/%Y",
-                timezone: "UTC"
+                // timezone: "UTC"
               }
             }
           }
