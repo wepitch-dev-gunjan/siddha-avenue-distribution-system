@@ -307,6 +307,7 @@ exports.login = async (req, res) => {
 
     let user;
     let tokenPayload = {};
+    let isSiddhaAdmin = false;
 
     // Check role and retrieve the appropriate user
     if (role === "employee") {
@@ -314,6 +315,10 @@ exports.login = async (req, res) => {
       user = await User.findOne({ code });
       if (!user) {
         return res.status(401).json({ error: "User not registered with this code" });
+      }
+
+      if (user.code === 'SC-OWN0001'){
+        isSiddhaAdmin = true;
       }
 
       // Set token payload for employee
@@ -325,6 +330,7 @@ exports.login = async (req, res) => {
         position: user.position,
         role: "employee", // Include role in the token payload
         code: user.code,
+        is_siddha_admin: isSiddhaAdmin,
       };
     } else if (role === "dealer") {
       // Find the dealer by dealerCode for dealer
@@ -362,6 +368,7 @@ exports.login = async (req, res) => {
       role, // Include the role in the response to differentiate dashboards
       verified: user.verified || false, // Default to true if not present in dealer
       position: user.position || "Dealer", // Default to 'Dealer' for dealers
+      is_siddha_admin: isSiddhaAdmin,
     });
   } catch (error) {
     console.error(error);

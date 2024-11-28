@@ -88,6 +88,8 @@ exports.uploadSalesDataMTDW = async (req, res) => {
 exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
   try {
     let { code } = req;
+    let { is_siddha_admin } = req;
+    console.log("IS SIDDHA ADMIN: ", is_siddha_admin);
     let { td_format, start_date, end_date, data_format } = req.query;
     console.log("Start date, end date, td_format, data_format: ", start_date, end_date, td_format, data_format);
 
@@ -141,9 +143,12 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
       parsedDate: {
         $gte: currentMonthStartDate,
         $lt: endDateForThisMonth
-      },
-      [position]: name
+      }
     };
+
+    if(!is_siddha_admin){
+      matchStage[position] = name;
+    }
 
     const result = {};
 
@@ -183,6 +188,14 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
       let previousMonthEndDate = new Date(endDate);
       previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
 
+      const matchStageForLastMonth = {
+        parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+      }
+
+      if (!is_siddha_admin){
+        matchStageForLastMonth[position] = name;
+      }
+
       const lastMonthSalesStats = await SalesDataMTDW.aggregate([
         {
           $addFields: {
@@ -196,10 +209,12 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
           }
         },
         { 
-          $match: {
-            parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
-            [position]: name
-          }
+          // $match: {
+          //   parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+          //   [position]: name //VARUN
+            
+          // }
+          $match : matchStageForLastMonth
         },
         {
           $group: {
@@ -258,7 +273,7 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
         {
           $match: {
             parsedDate: { $gte: new Date(`${endYear}-01-01`), $lte: endDate },
-            [position]: name
+            [position]: name  //VARUN
           }
         },
         {
@@ -285,7 +300,7 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
         {
           $match: {
             parsedDate: { $gte: new Date(`${endYear - 1}-01-01`), $lte: new Date(`${endYear - 1}-${endMonth}-${presentDayOfMonth}`) },
-            [position]: name
+            [position]: name //VARUN
           }
         },
         {

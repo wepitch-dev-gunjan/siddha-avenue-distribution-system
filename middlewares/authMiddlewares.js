@@ -29,6 +29,7 @@ exports.userAuth = async (req, res, next) => {
     req.name = decoded.name;
     req.email = decoded.email;
     req.user_id = decoded.user_id;
+    req.is_siddha_admin = decoded.is_siddha_admin;
 
     next();
   } catch (error) {
