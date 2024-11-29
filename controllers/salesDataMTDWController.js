@@ -137,7 +137,7 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
 
     // startDate = new Date(startDate.toLocaleDateString('en-US'));
     // endDate = new Date(endDate.toLocaleDateString('en-US'));
-    endDate.setUTCHours(23, 59, 59, 59);
+    // endDate.setUTCHours(23, 59, 59, 59);
     console.log("endDate: ", endDate);
 
 
@@ -159,8 +159,8 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
  
     let matchStage = {
       parsedDate: {
-        $gte: currentMonthStartDate,
-        $lt: endDateForThisMonth
+        $gt: currentMonthStartDate,
+        $lte: endDateForThisMonth
       }
     };
 
