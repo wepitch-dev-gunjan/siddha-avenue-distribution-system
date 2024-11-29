@@ -115,9 +115,25 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     if (!td_format) td_format = 'MTD';
     if (!data_format) data_format = "value";
 
+    // // Parse start_date and end_date from request query in YYYY-MM-DD format
+    // let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    // let endDate = end_date ? new Date(end_date) : new Date();
+
+
+    // Maintaining consistent date values across local and prod 
     // Parse start_date and end_date from request query in YYYY-MM-DD format
-    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    let endDate = end_date ? new Date(end_date) : new Date();
+    let startDate = start_date
+    ? new Date(`${start_date}T00:00:00Z`) // Explicitly set to UTC
+    : new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1)); // First day of current month in UTC
+
+    let endDate = end_date
+    ? new Date(`${end_date}T23:59:59Z`) // Explicitly set to UTC
+    : new Date(); // Current time in system's timezone (or change to UTC if needed)
+
+    // Ensure dates are logged in UTC for debugging
+    console.log('Start Date (UTC):', startDate.toISOString());
+    console.log('End Date (UTC):', endDate.toISOString());
+
 
     // startDate = new Date(startDate.toLocaleDateString('en-US'));
     // endDate = new Date(endDate.toLocaleDateString('en-US'));
