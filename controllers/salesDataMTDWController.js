@@ -125,7 +125,6 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     let { td_format, start_date, end_date, data_format } = req.query;
     console.log("Start date, end date, td_format, data_format: ", start_date, end_date, td_format, data_format);
 
-
     // Validate that employee code is provided
     if (!code) {
       return res.status(400).send({ error: "Employee code is required." });
@@ -147,10 +146,6 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     if (!td_format) td_format = 'MTD';
     if (!data_format) data_format = "value";
 
-    // // Parse start_date and end_date from request query in YYYY-MM-DD format
-    // let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    // let endDate = end_date ? new Date(end_date) : new Date();
-
 
     // Parse and handle start_date and end_date
     const startDate = start_date ? getUTCDate(start_date) : getUTCStartOfMonth(new Date());
@@ -158,11 +153,6 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
 
     console.log('Start Date (UTC):', startDate.toISOString());
     console.log('End Date (UTC):', endDate.toISOString());
-
-
-    // startDate = new Date(startDate.toLocaleDateString('en-US'));
-    // endDate = new Date(endDate.toLocaleDateString('en-US'));
-    // endDate.setUTCHours(23, 59, 59, 59);
     console.log("endDate: ", endDate);
 
 
@@ -250,11 +240,6 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
           }
         },
         { 
-          // $match: {
-          //   parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
-          //   [position]: name //VARUN
-            
-          // }
           $match : matchStageForLastMonth
         },
         {
@@ -626,11 +611,9 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
     if (!data_format) data_format = "value";
 
     // Parse start_date and end_date from request query in YYYY-MM-DD format
-    let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    let endDate = end_date ? new Date(end_date) : new Date();
+    const startDate = start_date ? getUTCDate(start_date) : getUTCStartOfMonth(new Date());
+    const endDate = end_date ? getUTCDate(end_date) : getCurrentDateUTC();
 
-    startDate = new Date(startDate.toLocaleDateString('en-US'));
-    endDate = new Date(endDate.toLocaleDateString('en-US'));
 
     const startYear = startDate.getFullYear();
     const startMonth = startDate.getMonth() + 1; // Month is zero-based
@@ -638,10 +621,13 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
     const endMonth = endDate.getMonth() + 1; // Month is zero-based
     const presentDayOfMonth = endDate.getDate();
 
+    const currentMonthStartDate = getUTCStartOfMonth(new Date(endDate));
+    const endDateForThisMonth = getUTCEndOfMonth(new Date(endDate));
+
     let matchStage = {
       parsedDate: {
-        $gte: startDate,
-        $lte: endDate
+        $gte: currentMonthStartDate,
+        $lte: endDateForThisMonth
       },
       [position_category]: name
     };
@@ -678,11 +664,7 @@ exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
         }
       ]);
 
-      // Fetch last month's data (LMTD)
-      let previousMonthStartDate = new Date(startDate);
-      previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
-      let previousMonthEndDate = new Date(endDate);
-      previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+      const { previousMonthStartDate, previousMonthEndDate } = getPreviousMonthDates(startDate, endDate);
 
       const lastMonthSalesStats = await SalesDataMTDW.aggregate([
         {
@@ -6393,7 +6375,7 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 };
 
 
-// 29112924 1510 
+// 29112024 1510 
 // exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
 //   try {
 //     let { code } = req;
@@ -6669,6 +6651,224 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 //     res.status(500).send({ error: 'Internal Server Error' });
 //   }
 // };
+
+// 29112024 1547
+// exports.getSalesDashboardDataByEmployeeNameMTDW = async (req, res) => {
+//   try {
+//     let { td_format, start_date, end_date, data_format, name, position_category } = req.query;
+
+//     // Validate that employee code is provided
+//     if (!name || !position_category) {
+//       return res.status(400).send({ error: "Name and position category is required." });
+//     }
+
+//     if (!td_format) td_format = 'MTD';
+//     if (!data_format) data_format = "value";
+
+//     // Parse start_date and end_date from request query in YYYY-MM-DD format
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     startDate = new Date(startDate.toLocaleDateString('en-US'));
+//     endDate = new Date(endDate.toLocaleDateString('en-US'));
+
+//     const startYear = startDate.getFullYear();
+//     const startMonth = startDate.getMonth() + 1; // Month is zero-based
+//     const endYear = endDate.getFullYear();
+//     const endMonth = endDate.getMonth() + 1; // Month is zero-based
+//     const presentDayOfMonth = endDate.getDate();
+
+//     let matchStage = {
+//       parsedDate: {
+//         $gte: startDate,
+//         $lte: endDate
+//       },
+//       [position_category]: name
+//     };
+
+//     const result = {};
+
+//     if (td_format === 'MTD') {
+//       // Fetch current month (MTD) data
+//       const salesStats = await SalesDataMTDW.aggregate([
+//         {
+//           $addFields: {
+//             parsedDate: {
+//               $dateFromString: {
+//                 dateString: "$DATE",
+//                 format: "%m/%d/%Y",
+//                 timezone: "UTC"
+//               }
+//             }
+//           }
+//         },
+//         { $match: matchStage }, // Match current month
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             MTD_Value: { $sum: { $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME" } },
+//           }
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             salesType: "$_id",
+//             MTD_Value: 1,
+//           }
+//         }
+//       ]);
+
+//       // Fetch last month's data (LMTD)
+//       let previousMonthStartDate = new Date(startDate);
+//       previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+//       let previousMonthEndDate = new Date(endDate);
+//       previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+
+//       const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+//         {
+//           $addFields: {
+//             parsedDate: {
+//               $dateFromString: {
+//                 dateString: "$DATE",
+//                 format: "%m/%d/%Y",
+//                 timezone: "UTC"
+//               }
+//             }
+//           }
+//         },
+//         { 
+//           $match: {
+//             parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+//             [position_category]: name
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             LMTD_Value: { $sum: { $toInt: data_format === "value" ? "$MTD VALUE" : "$MTD VOLUME" } },
+//           }
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             salesType: "$_id",
+//             LMTD_Value: 1,
+//           }
+//         }
+//       ]);
+
+//       // Error handling: if no data found, set LMTD_Value to 'N/A'
+//       let lmtDataMap = {};
+//       lastMonthSalesStats.forEach(item => {
+//         lmtDataMap[item.salesType] = item.LMTD_Value || 'N/A';
+//       });
+
+//       // Iterate through MTD data and append LMTD
+//       salesStats.forEach(item => {
+//         if (item.salesType === "Sell In" || item.salesType === "Sell Thru2") {
+//           result.td_sell_in = formatNumberIndian(item.MTD_Value);
+//           result.ltd_sell_in = lmtDataMap[item.salesType] !== 'N/A' ? formatNumberIndian(lmtDataMap[item.salesType]) : 'N/A';
+//           result.sell_in_growth = lmtDataMap[item.salesType] !== 'N/A' && lmtDataMap[item.salesType] !== 0
+//             ? (((item.MTD_Value - lmtDataMap[item.salesType]) / lmtDataMap[item.salesType]) * 100).toFixed(2) + '%'
+//             : 'N/A';
+//         } else if (item.salesType === "Sell Out") {
+//           result.td_sell_out = formatNumberIndian(item.MTD_Value);
+//           result.ltd_sell_out = lmtDataMap[item.salesType] !== 'N/A' ? formatNumberIndian(lmtDataMap[item.salesType]) : 'N/A';
+//           result.sell_out_growth = lmtDataMap[item.salesType] !== 'N/A' && lmtDataMap[item.salesType] !== 0
+//             ? (((item.MTD_Value - lmtDataMap[item.salesType]) / lmtDataMap[item.salesType]) * 100).toFixed(2) + '%'
+//             : 'N/A';
+//         }
+//       });
+//     }
+
+//     // For YTD
+//     if (td_format === 'YTD') {
+//       // Current Year YTD data
+//       const salesStats = await SalesDataMTDW.aggregate([
+//         {
+//           $addFields: {
+//             parsedDate: {
+//               $dateFromString: {
+//                 dateString: "$DATE",
+//                 format: "%m/%d/%Y",
+//                 timezone: "UTC"
+//               }
+//             }
+//           }
+//         },
+//         {
+//           $match: {
+//             parsedDate: { $gte: new Date(`${endYear}-01-01`), $lte: endDate },
+//             [position_category]: name
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "YTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
+//           }
+//         }
+//       ]);
+
+//       // Last Year YTD data
+//       const lastYearSalesStats = await SalesDataMTDW.aggregate([
+//         {
+//           $addFields: {
+//             parsedDate: {
+//               $dateFromString: {
+//                 dateString: "$DATE",
+//                 format: "%m/%d/%Y",
+//                 timezone: "UTC"
+//               }
+//             }
+//           }
+//         },
+//         {
+//           $match: {
+//             parsedDate: { $gte: new Date(`${endYear - 1}-01-01`), $lte: new Date(`${endYear - 1}-${endMonth}-${presentDayOfMonth}`) },
+//             [position_category]: name
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: "$SALES TYPE",
+//             "LYTD VALUE": { $sum: { $toInt: "$MTD VALUE" } }
+//           }
+//         }
+//       ]);
+
+//       // Error handling for missing LYTD data
+//       let lastYearDataMap = {};
+//       lastYearSalesStats.forEach(item => {
+//         lastYearDataMap[item._id] = item['LYTD VALUE'] || 'N/A';
+//       });
+
+//       // Process and compare YTD and LYTD data
+//       salesStats.forEach(item => {
+//         if (item._id === 'Sell Out') {
+//           result.td_sell_out = exports.formatNumberIndian(item['YTD VALUE']);
+//           result.ltd_sell_out = lastYearDataMap[item._id] !== 'N/A' ? exports.formatNumberIndian(lastYearDataMap[item._id]) : 'N/A';
+//           result.sell_out_growth = lastYearDataMap[item._id] !== 'N/A' && lastYearDataMap[item._id] !== 0
+//             ? (((item['YTD VALUE'] - lastYearDataMap[item._id]) / lastYearDataMap[item._id]) * 100).toFixed(2) + '%'
+//             : 'N/A';
+//         } else {
+//           result.td_sell_in = exports.formatNumberIndian(item['YTD VALUE']);
+//           result.ltd_sell_in = lastYearDataMap[item._id] !== 'N/A' ? exports.formatNumberIndian(lastYearDataMap[item._id]) : 'N/A';
+//           result.sell_in_growth = lastYearDataMap[item._id] !== 'N/A' && lastYearDataMap[item._id] !== 0
+//             ? (((item['YTD VALUE'] - lastYearDataMap[item._id]) / lastYearDataMap[item._id]) * 100).toFixed(2) + '%'
+//             : 'N/A';
+//         }
+//       });
+//     }
+
+//     res.status(200).send(result);
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send({ error: 'Internal Server Error' });
+//   }
+// };
+
 
 
 
