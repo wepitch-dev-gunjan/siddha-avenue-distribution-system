@@ -5558,7 +5558,7 @@ exports.getSalesDataChannelWiseByDealerCategoryMTDW = async (req, res) => {
 // Utilities 
 exports.getAllSubordinatesMTDW = async (req, res) => {
   try {
-    let { code } = req;
+    let { code, is_siddha_admin } = req;
 
     if (!code) {
       return res.status(400).send({ error: "Employee code is required!" });
@@ -5577,6 +5577,10 @@ exports.getAllSubordinatesMTDW = async (req, res) => {
     // console.log("Name & Position: ", name, position);
 
     const positionsHierarchy = {
+      OWN: ["ZSM", "ABM", "RSO", "ASE", "ASM", "TSE"],
+      BM: ["ZSM", "ABM", "RSO", "ASE", "ASM", "TSE"],
+      MIS: ["ZSM", "ABM", "RSO", "ASE", "ASM", "TSE"],
+      FIN: ["ZSM", "ABM", "RSO", "ASE", "ASM", "TSE"],
       ZSM: ["ABM", "RSO", "ASE", "ASM", "TSE"],
       ABM: ["RSO", "ASE", "ASM", "TSE"],
       RSO: ["ASE", "ASM", "TSE"],
@@ -5588,7 +5592,62 @@ exports.getAllSubordinatesMTDW = async (req, res) => {
       return res.status(400).json({ error: "Invalid position." });
     }
 
-    const subordinatesPipeline = [
+    
+
+    const subordinatesPipeline = is_siddha_admin ?  
+    [
+      // Match all records
+      {
+        $match: {},
+      },
+      {
+        $group: positionsHierarchy["OWN"].reduce((group, pos) => {
+          group[pos] = {
+            $addToSet: {
+              $cond: [
+                {
+                  $or: [{ $eq: [`$${pos}`, ""] }, { $eq: [`$${pos}`, "0"] }]
+                },
+                null,
+                `$${pos}`,
+              ],
+            },
+          };
+          return group;
+        }, {_id: null}
+      ),
+      },
+
+      //Formatting the result
+      {
+        $project: {
+          _id: 0,
+          subordinates: positionsHierarchy["OWN"].reduce((acc, pos) => {
+            acc[pos] = {
+              $concatArrays: [
+                [{ $literal: "ALL" }], //Add "All" at the start of the array
+                {
+                  $filter: {
+                    input: `$${pos}`,
+                    as: "name",
+                    cond: {
+                      $and: [
+                        { $ne: ["$$name", null] },
+                        { $ne: ["$$name", ""] },
+                        { $ne: ["$$name", "0"]},
+                      ],
+                    },
+                  },
+                },
+              ],
+            };
+            return acc;
+          }, {}),
+        },
+      },
+    ]
+    : 
+    [
       {
         $match: {
           [position]: name,
@@ -6870,6 +6929,140 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 // };
 
 
+// 29112024 1613 
+// exports.getAllSubordinatesMTDW = async (req, res) => {
+//   try {
+//     let { code } = req;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required!" });
+//     }
+
+//     const employeeCodeUpper = code.toUpperCase();
+
+//     // Fetching employee details based on the code
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+//     if (!employee) {
+//       return res.status(404).send({ error: "Employee not found with the given code" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+
+//     // console.log("Name & Position: ", name, position);
+
+//     const positionsHierarchy = {
+//       ZSM: ["ABM", "RSO", "ASE", "ASM", "TSE"],
+//       ABM: ["RSO", "ASE", "ASM", "TSE"],
+//       RSO: ["ASE", "ASM", "TSE"],
+//       ASE: ["ASM", "TSE"],
+//       ASM: ["TSE"],
+//     };
+
+//     if (!positionsHierarchy[position]) {
+//       return res.status(400).json({ error: "Invalid position." });
+//     }
+
+//     const subordinatesPipeline = [
+//       {
+//         $match: {
+//           [position]: name,
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: null,
+//           ABM: {
+//             $addToSet: {
+//               $cond: [
+//                 { $or: [{ $eq: ["$ABM", ""] }, { $eq: ["$ABM", "0"] }] },
+//                 null,
+//                 "$ABM",
+//               ],
+//             },
+//           },
+//           RSO: {
+//             $addToSet: {
+//               $cond: [
+//                 { $or: [{ $eq: ["$RSO", ""] }, { $eq: ["$RSO", "0"] }] },
+//                 null,
+//                 "$RSO",
+//               ],
+//             },
+//           },
+//           ASE: {
+//             $addToSet: {
+//               $cond: [
+//                 { $or: [{ $eq: ["$ASE", ""] }, { $eq: ["$ASE", "0"] }] },
+//                 null,
+//                 "$ASE",
+//               ],
+//             },
+//           },
+//           ASM: {
+//             $addToSet: {
+//               $cond: [
+//                 { $or: [{ $eq: ["$ASM", ""] }, { $eq: ["$ASM", "0"] }] },
+//                 null,
+//                 "$ASM",
+//               ],
+//             },
+//           },
+//           TSE: {
+//             $addToSet: {
+//               $cond: [
+//                 { $or: [{ $eq: ["$TSE", ""] }, { $eq: ["$TSE", "0"] }] },
+//                 null,
+//                 "$TSE",
+//               ],
+//             },
+//           },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           subordinates: positionsHierarchy[position].reduce((acc, pos) => {
+//             acc[pos] = {
+//               $concatArrays: [
+//                 [{ $literal: "All" }], // Add "All" element at the start of the array
+//                 {
+//                   $filter: {
+//                     input: `$${pos}`,
+//                     as: "name",
+//                     cond: {
+//                       $and: [
+//                         { $ne: ["$$name", null] },
+//                         { $ne: ["$$name", ""] },
+//                         { $ne: ["$$name", "0"] },
+//                       ],
+//                     },
+//                   },
+//                 },
+//               ],
+//             };
+//             return acc;
+//           }, {}),
+//         },
+//       },
+//     ];
+
+//     const subordinates = await SalesDataMTDW.aggregate(subordinatesPipeline);
+
+//     if (!subordinates.length) {
+//       return res.status(404).json({ error: "No subordinates found." });
+//     }
+
+//     const result = {
+//       positions: positionsHierarchy[position],
+//       ...subordinates[0].subordinates,
+//     };
+
+//     res.status(200).json(result);
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// };
 
 
 
