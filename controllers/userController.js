@@ -317,7 +317,7 @@ exports.login = async (req, res) => {
         return res.status(401).json({ error: "User not registered with this code" });
       }
 
-      if (user.code === 'SC-OWN0001'){
+      if (user.position === 'OWN' || user.position === 'BM' || user.position === 'MIS' || user.position === 'FIN'){
         isSiddhaAdmin = true;
       }
 
