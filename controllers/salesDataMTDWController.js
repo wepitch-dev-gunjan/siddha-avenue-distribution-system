@@ -131,10 +131,10 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     const endMonth = endDate.getMonth() + 1; // Month is zero-based
     const presentDayOfMonth = endDate.getDate();
 
-    const currentMonthStartDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 2);
+    const currentMonthStartDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 1);
     currentMonthStartDate.setUTCHours(0, 0, 0, 0);
 
-    const endDateForThisMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 2);
+    const endDateForThisMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
     endDateForThisMonth.setUTCHours(0, 0, 0, 0);
     console.log("currentMonthStartDate: ", currentMonthStartDate);
     console.log("endDateForThisMonth: ", endDateForThisMonth);
