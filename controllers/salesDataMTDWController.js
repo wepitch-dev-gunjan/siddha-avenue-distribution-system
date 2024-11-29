@@ -119,8 +119,8 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     let endDate = end_date ? new Date(end_date) : new Date();
 
-    startDate = new Date(startDate.toLocaleDateString('en-US'));
-    endDate = new Date(endDate.toLocaleDateString('en-US'));
+    // startDate = new Date(startDate.toLocaleDateString('en-US'));
+    // endDate = new Date(endDate.toLocaleDateString('en-US'));
     endDate.setUTCHours(23, 59, 59, 59);
     console.log("endDate: ", endDate);
 
@@ -131,10 +131,10 @@ exports.getSalesDashboardDataForEmployeeMTDW = async (req, res) => {
     const endMonth = endDate.getMonth() + 1; // Month is zero-based
     const presentDayOfMonth = endDate.getDate();
 
-    const currentMonthStartDate = new Date(endDate.getFullYear(), endDate.getMonth(), 2);
+    const currentMonthStartDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 2);
     currentMonthStartDate.setUTCHours(0, 0, 0, 0);
 
-    const endDateForThisMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 2);
+    const endDateForThisMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 2);
     endDateForThisMonth.setUTCHours(0, 0, 0, 0);
     console.log("currentMonthStartDate: ", currentMonthStartDate);
     console.log("endDateForThisMonth: ", endDateForThisMonth);
