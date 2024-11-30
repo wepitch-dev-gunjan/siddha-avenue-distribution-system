@@ -588,4 +588,31 @@ exports.updateDealerCategoryFromCSV = async (req, res) => {
   }
 };
 
+exports.addDefaultAddressToDealers = async (req, res) => {
+  try {
+    // Fetch all dealers where the address field is missing
+    const dealersWithoutAddress = await Dealer.find({ address: { $exists: false } });
+
+    if (!dealersWithoutAddress || dealersWithoutAddress.length === 0) {
+      return res.status(200).json({ message: "All dealers already have the address field." });
+    }
+
+    // Update each dealer to add the address field with default values
+    for (const dealer of dealersWithoutAddress) {
+      dealer.address = {
+        state: "Rajasthan",
+        district: "Jaipur",
+        town: "",
+      };
+      await dealer.save();
+    }
+
+    return res.status(200).json({
+      message: `${dealersWithoutAddress.length} dealers updated with the address field.`,
+    });
+  } catch (error) {
+    console.error("Error updating dealers with address:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 

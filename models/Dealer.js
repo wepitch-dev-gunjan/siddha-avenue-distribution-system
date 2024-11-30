@@ -13,6 +13,11 @@ const dealerSchema = new Schema({
     type: String,
     required: true
   },
+  address: {
+    state: { type: String, default: "Rajasthan" },
+    district: { type: String, default: "Jaipur" },
+    town: { type: String, default: "" },
+  },
   shopAddress: {
     type: String,
     required: true

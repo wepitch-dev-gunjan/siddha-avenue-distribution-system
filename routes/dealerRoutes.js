@@ -1,5 +1,5 @@
 const express = require("express");
-const { addDealer, getDealer, isDealerVerified, editDealer, verifyAllDealers, registerDealersFromSalesData, deleteDuplicateDealers, capitalizeDealerCodes, updateDealerCategoryFromCSV } = require("../controllers/dealerControllers");
+const { addDealer, getDealer, isDealerVerified, editDealer, verifyAllDealers, registerDealersFromSalesData, deleteDuplicateDealers, capitalizeDealerCodes, updateDealerCategoryFromCSV, addDefaultAddressToDealers } = require("../controllers/dealerControllers");
 const router = express.Router();
 const { userAuth, dealerAuth } = require("../middlewares/authMiddlewares");
 const { upload } = require("../services/fileUpload");
@@ -20,5 +20,8 @@ router.put("/capitalize-all-dealer-codes", capitalizeDealerCodes);
 
 // Update dealer category from csv 
 router.put("/update-dealer-categories", upload.single("file"), updateDealerCategoryFromCSV);
+
+// Update dealer addresses
+router.put("/add-default-address-to-dealers", addDefaultAddressToDealers);
 
 module.exports = router;
