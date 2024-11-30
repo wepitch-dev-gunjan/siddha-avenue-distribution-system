@@ -781,7 +781,19 @@ exports.getUniqueColumnValues = async (req, res) => {
 
         let uniqueValues;
 
-        if (column === 'uploadedBy'){
+        if (column === 'state'){
+            uniqueValues = ["Rajasthan"]
+        } 
+        else if (column === 'district') 
+        {
+            uniqueValues = ['Jaipur']
+        } 
+        else if (column === 'town') 
+        {
+            uniqueValues = ['Jaipur']
+        } 
+        else if (column === 'uploadedBy')
+        {
             
             const uploadedByCodes = await ExtractionRecord.distinct('uploadedBy');
 
@@ -798,8 +810,9 @@ exports.getUniqueColumnValues = async (req, res) => {
             })
 
             console.log("TSEs: ", uniqueValues)
-
-        } else if (column.startsWith('productId.')) {
+        } 
+        else if (column.startsWith('productId.')) 
+        {
             // Query unique values from the Product model for fields like Brand or Segment
             const aggregationResult = await ExtractionRecord.aggregate([
                 {
