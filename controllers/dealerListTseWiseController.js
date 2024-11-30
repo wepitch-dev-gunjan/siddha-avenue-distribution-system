@@ -119,6 +119,33 @@ exports.updateDealerListWithSalesData = async (req, res) => {
     res.status(500).send("Internal server error while updating dealer list");
   }
 };
+
+
+exports.addDefaultAddressToDealerListTseWise = async (req, res) => {
+  try {
+    // Update all documents without the 'address' field
+    const result = await DealerListTseWise.updateMany(
+      { address: { $exists: false } },
+      {
+        $set: {
+          address: {
+            state: "Rajasthan",
+            district: "Jaipur",
+            town: "",
+          },
+        },
+      }
+    );
+
+    return res.status(200).json({
+      message: `${result.modifiedCount} entries updated with the address field.`,
+    });
+  } catch (error) {
+    console.error("Error updating entries with address:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
   
 
 
