@@ -96,7 +96,7 @@ const getCurrentDateUTC = () => new Date(new Date().toISOString());
 // Utility function to subtract a month and handle edge cases
 const getPreviousMonthDates = (startDate, endDate) => {
   // Adjust start date to the previous month
-  let previousMonthStartDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+  let previousMonthStartDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() - 1, startDate.getUTCDate()));
   
   // Adjust end date to the previous month
   let previousMonthEndDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - 1, endDate.getUTCDate()));
