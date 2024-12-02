@@ -988,7 +988,7 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
 
 exports.getExtractionOverviewForAdmins = async (req, res) => {
     try {
-        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.query;
+        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.body;
 
         console.log("Start date, end date: ", startDate, endDate, showShare);
         console.log("dealerCode: ", dealerCode);
