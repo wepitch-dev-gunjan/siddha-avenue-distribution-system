@@ -988,7 +988,7 @@ exports.getExtractionDataForAdminWithFilters = async (req, res) => {
 
 exports.getExtractionOverviewForAdmins = async (req, res) => {
     try {
-        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, page = 1, limit = 100, showShare = 'false' } = req.body;
+        let { startDate, endDate, valueVolume = 'value', segment, dealerCode, tse, type, area, tlName, abm, ase, asm, rso, zsm, state, district, town, page = 1, limit = 100, showShare = 'false' } = req.body;
 
         console.log("Start date, end date: ", startDate, endDate, showShare);
         console.log("dealerCode: ", dealerCode);
@@ -1001,6 +1001,9 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         console.log("ASM: ", asm);
         console.log("RSO: ", rso);
         console.log("ZSM: ", zsm);
+        console.log("State: ", state);
+        console.log("District: ", district);
+        console.log("Town: ", town);
 
         const filter = {};
         const samsungFilter = {};
@@ -1055,6 +1058,11 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
         if (asm && asm.length) dealerFilters.ASM = { $in: asm };
         if (rso && rso.length) dealerFilters.RSO = { $in: rso };
         if (type && type.length) dealerFilters.TYPE = { $in: type };
+
+        // Geo filters
+        if (state && state.length) dealerFilters['address.state'] = {$in: state};
+        if (district && district.length) dealerFilters['address.district'] = {$in: district};
+        if (town && town.length) dealerFilters['address.district.town'] = {$in: town};
 
         console.log("Dealer Filters: ", dealerFilters);
 
