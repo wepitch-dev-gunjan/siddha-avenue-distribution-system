@@ -171,14 +171,45 @@ exports.getExtractionDataForEmployee = async (req, res) => {
     try {
         // Extract the employee code from the token (assuming it's stored in req.code)
         const { code } = req;
+        const {startDate, endDate} = req.query;
+
 
         // Validate if the code is present
         if (!code) {
             return res.status(400).json({ error: 'Employee code is required in the request.' });
         }
 
+        let startOfFilterRange;
+        let endOfFilterRange;
+
+        if (startDate && endDate) {
+            startOfFilterRange = new Date(Date.UTC(
+                new Date(startDate).getUTCFullYear(),
+                new Date(startDate).getUTCMonth(),
+                new Date(startDate).getUTCDate()
+            ));
+
+            endOfFilterRange = new Date(Date.UTC(
+                new Date(endDate).getUTCFullYear(),
+                new Date(endDate).getUTCMonth(),
+                new Date(endDate).getUTCDate(),
+                23, 59, 59
+            ));
+
+        } else {
+            const now = new Date();
+            startOfFilterRange = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+            endOfFilterRange = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59));
+        }
+
+        console.log("Filter Start Date (UTC): ", startOfFilterRange);
+        console.log("Filter End Date (UTC): ", endOfFilterRange);
+
         // Find extraction records that match the uploadedBy field with the code from the token
-        const extractionRecords = await ExtractionRecord.find({ uploadedBy: code }).populate({
+        const extractionRecords = await ExtractionRecord.find({ 
+            uploadedBy: code, 
+            createdAt: {$gte: startOfFilterRange, $lte: endOfFilterRange}
+        }).populate({
             path: 'productId',
             select: 'Brand Model Category' // Only select these fields from the Product model
         });
@@ -201,7 +232,11 @@ exports.getExtractionDataForEmployee = async (req, res) => {
                 Model: record.productId?.Model,
                 Category: record.productId?.Category,
                 quantity: record.quantity,
-                totalPrice: record.totalPrice
+                totalPrice: record.totalPrice,
+
+                // remove later
+                uploadedBy: record.uploadedBy,
+                createdAt: record.createdAt
             };
         }));
 
