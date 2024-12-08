@@ -1228,6 +1228,8 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                 Object.keys(row).forEach((brand) => {
                     if (brand !== 'Price Class' && brand !== 'Rank of Samsung') {
                         row[brand] = ((row[brand] / rowTotal) * 100).toFixed(2);
+                        row[brand] = row[brand].toString() + " %";
+                        console.log("Row Brand: ", row[brand]);
                     }
                 });
 
