@@ -1699,12 +1699,11 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       "Pending Vol": 0,
       "ADS": 0,
       "Req. ADS": 0,
-      "% Gwth Vol": 0,
       "Target SO": 0,
       "Pending Act": 0,
       "ADS Activation": 0,
       "Req. ADS Activation": 0,
-      "% Gwth Val": 0,
+      "% Gwth": 0,
       "FTD": 0,
       "Contribution %": 0
     };
@@ -1885,7 +1884,6 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
           "Pending Vol": pendingVol,
           "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
           "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-          "% Gwth Vol": growthVol.toFixed(2),
           "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
           "Pending Act": pendingVol,
           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
@@ -1903,7 +1901,6 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
           "Pending Val": pendingVol,
           "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
           "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-          "% Gwth Val": growthVol.toFixed(2),
           "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
           "Pending Act": pendingVol,
           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
@@ -1930,10 +1927,9 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       ...grandTotal,
       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
       "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Val": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "% Gwth": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
       "Contribution %": "100.00 %"  // Grand total will always have 100% contribution
     };
 
@@ -1950,7 +1946,6 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
         "Pending Vol",
         "ADS",
         "Req. ADS",
-        "% Gwth Vol",
         "Target SO",
         "Pending Act",
         "ADS Activation",
@@ -1968,7 +1963,6 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
         "Pending Val",
         "ADS",
         "Req. ADS",
-        "% Gwth Val",
         "Target SO",
         "Pending Act",
         "ADS Activation",
@@ -6471,6 +6465,332 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
     return res.status(500).send("Internal Server Error");
   }
 };
+
+
+
+
+// exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
+//   try {
+//     let { code } = req;
+//     let { start_date, end_date, data_format } = req.query;
+
+//     if (!code) {
+//       return res.status(400).send({ error: "Employee code is required" });
+//     }
+
+//     // Convert employee code to uppercase
+//     const employeeCodeUpper = code.toUpperCase();
+
+//     // Fetch employee details based on the code
+//     const employee = await EmployeeCode.findOne({ Code: employeeCodeUpper });
+
+//     if (!employee) {
+//       return res.status(404).send({ error: "Employee not found with the given code" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+
+//     // Default segments, including smartphones and tablets
+//     const segments = [
+//       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K",
+//       "Tab>40k", "Tab<40k", "Wearable"
+//     ];
+
+//     const defaultRow = {
+//       "Segment Wise": "",
+//       "Target Vol": 0,
+//       "Mtd Vol": 0,
+//       "Lmtd Vol": 0,
+//       "Pending Vol": 0,
+//       "ADS": 0,
+//       "Req. ADS": 0,
+//       "% Gwth Vol": 0,
+//       "Target SO": 0,
+//       "Pending Act": 0,
+//       "ADS Activation": 0,
+//       "Req. ADS Activation": 0,
+//       "% Gwth Val": 0,
+//       "FTD": 0,
+//       "Contribution %": 0
+//     };
+
+//     if (!name || !position) {
+//       return res.status(400).send({ error: "Name and position parameters are required" });
+//     }
+
+//     if (!data_format) data_format = 'value';
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     console.log("Start date, end date: ", startDate, endDate);
+
+//     const presentDayOfMonth = new Date().getDate();
+
+//     // Fetch target values and volumes by segment
+//     const { targetValuesBySegment, targetVolumesBySegment } = await fetchTargetValuesAndVolumes(endDate, name, position);
+
+//     // Query for MTD data
+//     const salesStatsQuery = [
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: startDate, $lte: endDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise aggregation
+//           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
+//           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
+//         }
+//       }
+//     ];
+
+//     const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
+
+//     // Query for LMTD data (previous month's data)
+//     let previousMonthStartDate = new Date(startDate);
+//     previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+//     let previousMonthEndDate = new Date(endDate);
+//     previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+
+//     const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise LMTD aggregation
+//           "LMTD VALUE": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Query for FTD data
+//     const ftdData = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: endDate,
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise FTD aggregation
+//           "FTD": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     let totalMTDSales = salesStats.reduce((total, segmentData) => {
+//       return total + (segmentData['MTD VALUE'] || 0); // sum up all the MTD values
+//     }, 0);
+
+//     // Build the report logic with all segments and include LMTD and FTD
+//     let lmtDataMap = {};
+//     let ftdDataMap = {};
+//     lastMonthSalesStats.forEach(item => {
+//       lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
+//     });
+//     ftdData.forEach(item => {
+//       ftdDataMap[item._id] = item['FTD'] || 0;
+//     });
+
+//     let report = segments.map(segment => {
+//       let segmentData = salesStats.find(item => item._id === segment) || {};
+//       let lmtValue = lmtDataMap[segment] || 0;
+//       let ftdValue = ftdDataMap[segment] || 0;
+
+//       // Safely access target values and volumes, defaulting to 0 if undefined
+//       let targetVol = (targetVolumesBySegment && targetVolumesBySegment[segment]) ? targetVolumesBySegment[segment] : 0;
+//       let mtdVol = segmentData['MTD VALUE'] || 0;
+//       let lmtdVol = lmtValue;
+
+//       // totalMTDSales += mtdVol;
+
+//       let pendingVol = targetVol - mtdVol;
+//       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+//       console.log("MTD vol, Total ", mtdVol, totalMTDSales);
+//       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
+
+
+
+//       if (data_format == 'volume') {
+//         return {
+//           "Segment Wise": segment,
+//           "Target Vol": targetVol,
+//           "Mtd Vol": mtdVol,
+//           "Lmtd Vol": lmtdVol,
+//           "Pending Vol": pendingVol,
+//           "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+//           "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//           "% Gwth Vol": growthVol.toFixed(2),
+//           "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+//           "Pending Act": pendingVol,
+//           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+//           "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//           "% Gwth": growthVol.toFixed(2),
+//           "FTD": ftdValue,
+//           "Contribution %": contribution.toString() + ' %'
+//         };
+//       } else {
+//         return {
+//           "Segment Wise": segment,
+//           "Target Val": targetVol,
+//           "Mtd Val": mtdVol,
+//           "Lmtd Val": lmtdVol,
+//           "Pending Val": pendingVol,
+//           "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+//           "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//           "% Gwth Val": growthVol.toFixed(2),
+//           "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+//           "Pending Act": pendingVol,
+//           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+//           "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//           "% Gwth": growthVol.toFixed(2),
+//           "FTD": ftdValue,
+//           "Contribution %": contribution.toString() + ' %'
+//         };
+//       }
+//     });
+
+//     // Grand total logic
+//     let grandTotal = report.reduce(
+//       (total, row) => {
+//         Object.keys(row).forEach(key => {
+//           if (key !== "Segment Wise") total[key] += parseFloat(row[key]) || 0;
+//         });
+//         return total;
+//       },
+//       { ...defaultRow, "Segment Wise": "Grand Total" }
+//     );
+
+//     grandTotal = {
+//       ...grandTotal,
+//       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+//       "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Val": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+//       "Contribution %": "100.00 %"  // Grand total will always have 100% contribution
+//     };
+
+//     report.unshift(grandTotal); // Insert the grand total as the first row
+
+//     let columnNames = [];
+    
+//     if (data_format == 'volume') {
+//       columnNames = [
+//         "Segment Wise",
+//         "Target Vol",
+//         "Mtd Vol",
+//         "Lmtd Vol",
+//         "Pending Vol",
+//         "ADS",
+//         "Req. ADS",
+//         "% Gwth Vol",
+//         "Target SO",
+//         "Pending Act",
+//         "ADS Activation",
+//         "Req. ADS Activation",
+//         "% Gwth",
+//         "FTD",
+//         "Contribution %"
+//       ];
+//     } else {
+//       columnNames = [
+//         "Segment Wise",
+//         "Target Val",
+//         "Mtd Val",
+//         "Lmtd Val",
+//         "Pending Val",
+//         "ADS",
+//         "Req. ADS",
+//         "% Gwth Val",
+//         "Target SO",
+//         "Pending Act",
+//         "ADS Activation",
+//         "Req. ADS Activation",
+//         "% Gwth",
+//         "FTD",
+//         "Contribution %"
+//       ];
+//     }
+
+//     res.status(200).json({ columns: columnNames, data: report });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
+
 
 
 // 29112024 1510 
