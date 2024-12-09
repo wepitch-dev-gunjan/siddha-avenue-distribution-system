@@ -1911,7 +1911,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
           "Pending Act": pendingVol,
           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
           "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-          "% Gwth": growthVol.toFixed(2),
+          "% Gwth": (growthVol.toFixed(2)).toString() + ' %',
           "FTD": ftdValue,
           "Contribution %": contribution.toString() + ' %'
         };
@@ -1928,7 +1928,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
           "Pending Act": pendingVol,
           "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
           "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-          "% Gwth": growthVol.toFixed(2),
+          "% Gwth": (growthVol.toFixed(2)).toString() + ' %',
           "FTD": ftdValue,
           "Contribution %": contribution.toString() + ' %'
         };
@@ -1952,7 +1952,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
       "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "% Gwth": (((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2)).toString() + ' %',
       "Contribution %": "100.00 %"  // Grand total will always have 100% contribution
     };
 
