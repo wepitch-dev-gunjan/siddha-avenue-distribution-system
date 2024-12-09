@@ -1691,22 +1691,45 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       "Tab>40k", "Tab<40k", "Wearable"
     ];
 
-    const defaultRow = {
-      "Segment Wise": "",
-      "Target Vol": 0,
-      "Mtd Vol": 0,
-      "Lmtd Vol": 0,
-      "Pending Vol": 0,
-      "ADS": 0,
-      "Req. ADS": 0,
-      "Target SO": 0,
-      "Pending Act": 0,
-      "ADS Activation": 0,
-      "Req. ADS Activation": 0,
-      "% Gwth": 0,
-      "FTD": 0,
-      "Contribution %": 0
-    };
+
+    let defaultRow = []
+
+    if (data_format == "volume"){
+      defaultRow = {
+        "Segment Wise": "",
+        "Target Vol": 0,
+        "Mtd Vol": 0,
+        "Lmtd Vol": 0,
+        "Pending Vol": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    } else {
+      defaultRow = {
+        "Segment Wise": "",
+        "Target Val": 0,
+        "Mtd Val": 0,
+        "Lmtd Val": 0,
+        "Pending Val": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    }
+
 
     if (!name || !position) {
       return res.status(400).send({ error: "Name and position parameters are required" });
