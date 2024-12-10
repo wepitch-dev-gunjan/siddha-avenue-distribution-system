@@ -2310,25 +2310,43 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       "Tab>40k", "Tab<40k", "Wearable"
     ];
 
-    const defaultRow = {
-      "Segment Wise": "",
-      "Target Vol": 0,
-      "Mtd Vol": 0,
-      "Lmtd Vol": 0,
-      "Pending Vol": 0,
-      "ADS": 0,
-      "Req. ADS": 0,
-      "% Gwth Vol": 0,
-      "Target SO": 0,
-      "Activation MTD": 0,
-      "Activation LMTD": 0,
-      "Pending Act": 0,
-      "ADS Activation": 0,
-      "Req. ADS Activation": 0,
-      "% Gwth Val": 0,
-      "FTD": 0,
-      "Contribution %": 0
-    };
+    let defaultRow = []
+
+    if (data_format == "volume"){
+      defaultRow = {
+        "Segment Wise": "",
+        "Target Vol": 0,
+        "Mtd Vol": 0,
+        "Lmtd Vol": 0,
+        "Pending Vol": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    } else {
+      defaultRow = {
+        "Segment Wise": "",
+        "Target Val": 0,
+        "Mtd Val": 0,
+        "Lmtd Val": 0,
+        "Pending Val": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    }
 
     if (!name || !position) {
       return res.status(400).send({ error: "Name and position parameters are required" });
@@ -2479,6 +2497,10 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
         return acc;
       }, { "MTD VALUE": 0, "TARGET VALUE": 0 });
 
+      let totalMTDSales = salesStats.reduce((total, segmentData) => {
+        return total + (segmentData['MTD VALUE'] || 0); // sum up all the MTD values
+      }, 0);
+  
     // Build the report logic with all segments and include LMTD and FTD
     let lmtDataMap = {};
     let ftdDataMap = {};
@@ -2489,7 +2511,7 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       ftdDataMap[item._id] = item['FTD'] || 0;
     });
 
-    let totalMTDSales = 0;
+    
     let report = segments.map(segment => {
       let segmentData = salesStats.find(item => item._id === segment) || {};
       let lmtValue = lmtDataMap[segment] || 0;
@@ -2500,52 +2522,49 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       let mtdVol = segmentData['MTD VALUE'] || 0;
       let lmtdVol = lmtValue;
     
-      totalMTDSales += mtdVol;
+      
     
       let pendingVol = targetVol - mtdVol;
       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
     
-      return {
-        "Segment Wise": segment,
-        "Target Vol": targetVol,
-        "Mtd Vol": mtdVol,
-        "Lmtd Vol": lmtdVol,
-        "Pending Vol": pendingVol,
-        "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
-        "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-        "% Gwth Vol": growthVol.toFixed(2),
-        "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
-        "Activation MTD": mtdVol,
-        "Activation LMTD": lmtdVol,
-        "Pending Act": pendingVol,
-        "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
-        "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-        "% Gwth Val": growthVol.toFixed(2),
-        "FTD": ftdValue,
-        "Contribution %": contribution
-      };
+      if (data_format == 'volume') {
+        return {
+          "Segment Wise": segment,
+          "Target Vol": targetVol,
+          "Mtd Vol": mtdVol,
+          "Lmtd Vol": lmtdVol,
+          "Pending Vol": pendingVol,
+          "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+          "Pending Act": pendingVol,
+          "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "% Gwth": (growthVol.toFixed(2)).toString() + ' %',
+          "FTD": ftdValue,
+          "Contribution %": contribution.toString() + ' %'
+        };
+      } else {
+        return {
+          "Segment Wise": segment,
+          "Target Val": targetVol,
+          "Mtd Val": mtdVol,
+          "Lmtd Val": lmtdVol,
+          "Pending Val": pendingVol,
+          "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+          "Pending Act": pendingVol,
+          "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "% Gwth": (growthVol.toFixed(2)).toString() + ' %',
+          "FTD": ftdValue,
+          "Contribution %": contribution.toString() + ' %'
+        };
+      }
     });
     
-
-    // // Add aggregated smartphone segments
-    // report.push({
-    //   "Segment Wise": "> 40 K (Smartphones)",
-    //   "Target Vol": greaterThan40KSmartphones["TARGET VALUE"],
-    //   "Mtd Vol": greaterThan40KSmartphones["MTD VALUE"],
-    //   "Lmtd Vol": 0, // Assuming no LMTD for now, can be calculated similarly
-    //   "Pending Vol": greaterThan40KSmartphones["TARGET VALUE"] - greaterThan40KSmartphones["MTD VALUE"],
-    //   // ... other fields
-    // });
-
-    // report.push({
-    //   "Segment Wise": "< 40 K (Smartphones)",
-    //   "Target Vol": lessThan40KSmartphones["TARGET VALUE"],
-    //   "Mtd Vol": lessThan40KSmartphones["MTD VALUE"],
-    //   "Lmtd Vol": 0, // Assuming no LMTD for now, can be calculated similarly
-    //   "Pending Vol": lessThan40KSmartphones["TARGET VALUE"] - lessThan40KSmartphones["MTD VALUE"],
-    //   // ... other fields
-    // });
 
     // Grand total logic
     let grandTotal = report.reduce(
@@ -2562,34 +2581,53 @@ exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
       ...grandTotal,
       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
-      "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+      "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+      "% Gwth": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "Contribution %": "100.00 %" 
     };
 
     report.unshift(grandTotal); // Insert the grand total as the first row
 
     // Add dynamic column names as the first entry in the response
-    const columnNames = {
-      "Segment Wise": "Segment Wise",
-      "Target Vol": "Target Vol",
-      "Mtd Vol": "Mtd Vol",
-      "Lmtd Vol": "Lmtd Vol",
-      "Pending Vol": "Pending Vol",
-      "ADS": "ADS",
-      "Req. ADS": "Req. ADS",
-      "% Gwth Vol": "% Gwth Vol",
-      "Target SO": "Target SO",
-      "Activation MTD": "Activation MTD",
-      "Activation LMTD": "Activation LMTD",
-      "Pending Act": "Pending Act",
-      "ADS Activation": "ADS Activation",
-      "Req. ADS Activation": "Req. ADS Activation",
-      "% Gwth Val": "% Gwth Val",
-      "FTD": "FTD",
-      "Contribution %": "Contribution %"
-    };
+
+    let columnNames = [];
+
+    if (data_format == 'volume') {
+      columnNames = [
+        "Segment Wise",
+        "Target Vol",
+        "Mtd Vol",
+        "Lmtd Vol",
+        "Pending Vol",
+        "ADS",
+        "Req. ADS",
+        "Target SO",
+        "Pending Act",
+        "ADS Activation",
+        "Req. ADS Activation",
+        "% Gwth",
+        "FTD",
+        "Contribution %"
+      ];
+    } else {
+      columnNames = [
+        "Segment Wise",
+        "Target Val",
+        "Mtd Val",
+        "Lmtd Val",
+        "Pending Val",
+        "ADS",
+        "Req. ADS",
+        "Target SO",
+        "Pending Act",
+        "ADS Activation",
+        "Req. ADS Activation",
+        "% Gwth",
+        "FTD",
+        "Contribution %"
+      ];
+    }
 
     // Add the column names at the start of the report
     report.unshift(columnNames);
@@ -6490,7 +6528,323 @@ exports.getDealerListForEmployeeByCode = async (req, res) => {
 };
 
 
+// exports.getSalesDataSegmentWiseBySubordinateCodeMTDW = async (req, res) => {
+//   try {
+//     let { subordinate_code } = req.params;
+//     let { start_date, end_date, data_format } = req.query;
 
+//     if (!subordinate_code) {
+//       return res.status(400).send({ error: "Subordinate code is required" });
+//     }
+
+//     // Convert employee code to uppercase
+//     const subordinateCodeUpper = subordinate_code.toUpperCase();
+
+//     // Fetch employee details based on the code
+//     const employee = await EmployeeCode.findOne({ Code: subordinateCodeUpper });
+
+//     if (!employee) {
+//       return res.status(404).send({ error: "Employee not found with the given code" });
+//     }
+
+//     const { Name: name, Position: position } = employee;
+
+//     // Default segments, including smartphones and tablets
+//     const segments = [
+//       "100K", "70-100K", "40-70K", "> 40 K", "< 40 K", "30-40K", "20-30K", "15-20K", "10-15K", "6-10K", 
+//       "Tab>40k", "Tab<40k", "Wearable"
+//     ];
+
+//     const defaultRow = {
+//       "Segment Wise": "",
+//       "Target Vol": 0,
+//       "Mtd Vol": 0,
+//       "Lmtd Vol": 0,
+//       "Pending Vol": 0,
+//       "ADS": 0,
+//       "Req. ADS": 0,
+//       "% Gwth Vol": 0,
+//       "Target SO": 0,
+//       "Activation MTD": 0,
+//       "Activation LMTD": 0,
+//       "Pending Act": 0,
+//       "ADS Activation": 0,
+//       "Req. ADS Activation": 0,
+//       "% Gwth Val": 0,
+//       "FTD": 0,
+//       "Contribution %": 0
+//     };
+
+//     if (!name || !position) {
+//       return res.status(400).send({ error: "Name and position parameters are required" });
+//     }
+
+//     if (!data_format) data_format = 'value';
+
+//     let startDate = start_date ? new Date(start_date) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+//     let endDate = end_date ? new Date(end_date) : new Date();
+
+//     const parseDate = (dateString) => {
+//       const [month, day, year] = dateString.split('/');
+//       return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+//     };
+
+//     startDate = parseDate(startDate.toLocaleDateString('en-US'));
+//     endDate = parseDate(endDate.toLocaleDateString('en-US'));
+
+//     const presentDayOfMonth = new Date().getDate();
+
+//     // Fetch target values and volumes by segment
+//     const { targetValuesBySegment, targetVolumesBySegment } = await fetchTargetValuesAndVolumes(endDate, name, position);
+
+//     // Query for MTD data
+//     const salesStatsQuery = [
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: startDate, $lte: endDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise aggregation
+//           "MTD VALUE": { $sum: { $toInt: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME" } },
+//           "TARGET VALUE": { $sum: { $toInt: data_format === 'value' ? "$TARGET VALUE" : "$TARGET VOLUME" } }
+//         }
+//       }
+//     ];
+
+//     const salesStats = await SalesDataMTDW.aggregate(salesStatsQuery);
+
+//     // Query for LMTD data (previous month's data)
+//     let previousMonthStartDate = new Date(startDate);
+//     previousMonthStartDate.setMonth(previousMonthStartDate.getMonth() - 1);
+//     let previousMonthEndDate = new Date(endDate);
+//     previousMonthEndDate.setMonth(previousMonthEndDate.getMonth() - 1);
+
+//     const lastMonthSalesStats = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: { $gte: previousMonthStartDate, $lte: previousMonthEndDate },
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise LMTD aggregation
+//           "LMTD VALUE": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Query for FTD data
+//     const ftdData = await SalesDataMTDW.aggregate([
+//       {
+//         $addFields: {
+//           parsedDate: {
+//             $dateFromString: {
+//               dateString: "$DATE",
+//               format: "%m/%d/%Y",
+//               timezone: "UTC"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           parsedDate: endDate,
+//           "SALES TYPE": "Sell Out",
+//           [position]: name
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$Segment Final",  // Segment-wise FTD aggregation
+//           "FTD": {
+//             $sum: {
+//               $convert: {
+//                 input: data_format === 'value' ? "$MTD VALUE" : "$MTD VOLUME",
+//                 to: "int",
+//                 onError: 0,
+//                 onNull: 0
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     // Handle smartphone segments separately for >40K and <40K
+//     let greaterThan40KSmartphones = salesStats
+//       .filter(item => item._id.includes("K") && parseFloat(item._id.split("-")[0]) > 40)
+//       .reduce((acc, item) => {
+//         acc["MTD VALUE"] += item["MTD VALUE"];
+//         acc["TARGET VALUE"] += item["TARGET VALUE"];
+//         return acc;
+//       }, { "MTD VALUE": 0, "TARGET VALUE": 0 });
+
+//     let lessThan40KSmartphones = salesStats
+//       .filter(item => item._id.includes("K") && parseFloat(item._id.split("-")[0]) <= 40)
+//       .reduce((acc, item) => {
+//         acc["MTD VALUE"] += item["MTD VALUE"];
+//         acc["TARGET VALUE"] += item["TARGET VALUE"];
+//         return acc;
+//       }, { "MTD VALUE": 0, "TARGET VALUE": 0 });
+
+//     // Build the report logic with all segments and include LMTD and FTD
+//     let lmtDataMap = {};
+//     let ftdDataMap = {};
+//     lastMonthSalesStats.forEach(item => {
+//       lmtDataMap[item._id] = item['LMTD VALUE'] || 0;
+//     });
+//     ftdData.forEach(item => {
+//       ftdDataMap[item._id] = item['FTD'] || 0;
+//     });
+
+//     let totalMTDSales = 0;
+//     let report = segments.map(segment => {
+//       let segmentData = salesStats.find(item => item._id === segment) || {};
+//       let lmtValue = lmtDataMap[segment] || 0;
+//       let ftdValue = ftdDataMap[segment] || 0;
+    
+//       // Safely access target values and volumes, defaulting to 0 if undefined
+//       let targetVol = (targetVolumesBySegment && targetVolumesBySegment[segment]) ? targetVolumesBySegment[segment] : 0;
+//       let mtdVol = segmentData['MTD VALUE'] || 0;
+//       let lmtdVol = lmtValue;
+    
+//       totalMTDSales += mtdVol;
+    
+//       let pendingVol = targetVol - mtdVol;
+//       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
+//       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
+    
+//       return {
+//         "Segment Wise": segment,
+//         "Target Vol": targetVol,
+//         "Mtd Vol": mtdVol,
+//         "Lmtd Vol": lmtdVol,
+//         "Pending Vol": pendingVol,
+//         "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+//         "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//         "% Gwth Vol": growthVol.toFixed(2),
+//         "Target SO": (targetValuesBySegment && targetValuesBySegment[segment]) ? targetValuesBySegment[segment] : 0,
+//         "Activation MTD": mtdVol,
+//         "Activation LMTD": lmtdVol,
+//         "Pending Act": pendingVol,
+//         "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+//         "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+//         "% Gwth Val": growthVol.toFixed(2),
+//         "FTD": ftdValue,
+//         "Contribution %": contribution
+//       };
+//     });
+    
+
+//     // // Add aggregated smartphone segments
+//     // report.push({
+//     //   "Segment Wise": "> 40 K (Smartphones)",
+//     //   "Target Vol": greaterThan40KSmartphones["TARGET VALUE"],
+//     //   "Mtd Vol": greaterThan40KSmartphones["MTD VALUE"],
+//     //   "Lmtd Vol": 0, // Assuming no LMTD for now, can be calculated similarly
+//     //   "Pending Vol": greaterThan40KSmartphones["TARGET VALUE"] - greaterThan40KSmartphones["MTD VALUE"],
+//     //   // ... other fields
+//     // });
+
+//     // report.push({
+//     //   "Segment Wise": "< 40 K (Smartphones)",
+//     //   "Target Vol": lessThan40KSmartphones["TARGET VALUE"],
+//     //   "Mtd Vol": lessThan40KSmartphones["MTD VALUE"],
+//     //   "Lmtd Vol": 0, // Assuming no LMTD for now, can be calculated similarly
+//     //   "Pending Vol": lessThan40KSmartphones["TARGET VALUE"] - lessThan40KSmartphones["MTD VALUE"],
+//     //   // ... other fields
+//     // });
+
+//     // Grand total logic
+//     let grandTotal = report.reduce(
+//       (total, row) => {
+//         Object.keys(row).forEach(key => {
+//           if (key !== "Segment Wise") total[key] += parseFloat(row[key]) || 0;
+//         });
+//         return total;
+//       },
+//       { ...defaultRow, "Segment Wise": "Grand Total" }
+//     );
+
+//     grandTotal = {
+//       ...grandTotal,
+//       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+//       "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+//       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
+//       "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+//     };
+
+//     report.unshift(grandTotal); // Insert the grand total as the first row
+
+//     // Add dynamic column names as the first entry in the response
+//     const columnNames = {
+//       "Segment Wise": "Segment Wise",
+//       "Target Vol": "Target Vol",
+//       "Mtd Vol": "Mtd Vol",
+//       "Lmtd Vol": "Lmtd Vol",
+//       "Pending Vol": "Pending Vol",
+//       "ADS": "ADS",
+//       "Req. ADS": "Req. ADS",
+//       "% Gwth Vol": "% Gwth Vol",
+//       "Target SO": "Target SO",
+//       "Activation MTD": "Activation MTD",
+//       "Activation LMTD": "Activation LMTD",
+//       "Pending Act": "Pending Act",
+//       "ADS Activation": "ADS Activation",
+//       "Req. ADS Activation": "Req. ADS Activation",
+//       "% Gwth Val": "% Gwth Val",
+//       "FTD": "FTD",
+//       "Contribution %": "Contribution %"
+//     };
+
+//     // Add the column names at the start of the report
+//     report.unshift(columnNames);
+
+//     res.status(200).send(report);
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).send("Internal Server Error");
+//   }
+// };
 
 // exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
 //   try {
