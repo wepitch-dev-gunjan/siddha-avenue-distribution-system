@@ -1955,6 +1955,7 @@ exports.getSalesDataSegmentWiseForEmployeeMTDW = async (req, res) => {
       "% Gwth": (((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2)).toString() + ' %',
       "Contribution %": "100.00 %"  // Grand total will always have 100% contribution
     };
+    console.log("Grand total: ", grandTotal);
 
     report.unshift(grandTotal); // Insert the grand total as the first row
 
