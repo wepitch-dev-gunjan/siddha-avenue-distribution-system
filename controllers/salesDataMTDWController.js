@@ -3289,26 +3289,44 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
     const channels = [
       "DCM", "PC", "PC EXT", "RRF EXT", "SCP", "SCP EXT", "SDP", "SES", "SES-LITE", "SIS PLUS", "SIS PLUS EXT", "SIS PRO", "SIS PRO EXT", "STAR DCM"   
     ];
+    let defaultRow = {}
 
-    const defaultRow = {
-      "Category Wise": "",
-      "Target Vol": 0,
-      "Mtd Vol": 0,
-      "Lmtd Vol": 0,
-      "Pending Vol": 0,
-      "ADS": 0,
-      "Req. ADS": 0,
-      "% Gwth Vol": 0,
-      "Target SO": 0,
-      "Activation MTD": 0,
-      "Activation LMTD": 0,
-      "Pending Act": 0,
-      "ADS Activation": 0,
-      "Req. ADS Activation": 0,
-      "% Gwth Val": 0,
-      "FTD": 0,
-      "Contribution %": 0
-    };
+    if (data_format == 'volume') {
+      defaultRow = {
+        "Category Wise": "",
+        "Target Vol": 0,
+        "Mtd Vol": 0,
+        "Lmtd Vol": 0,
+        "Pending Vol": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    } else {
+      defaultRow = {
+        "Category Wise": "",
+        "Target Val": 0,
+        "Mtd Val": 0,
+        "Lmtd Val": 0,
+        "Pending Val": 0,
+        "ADS": 0,
+        "Req. ADS": 0,
+        "Target SO": 0,
+        "Pending Act": 0,
+        "ADS Activation": 0,
+        "Req. ADS Activation": 0,
+        "% Gwth": 0,
+        "FTD": 0,
+        "Contribution %": 0
+      };
+    }
+
 
     if (!name || !position) {
       return res.status(400).send({ error: "Name and position parameters are required" });
@@ -3442,6 +3460,11 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
       }
     ]);
 
+    // First, calculate the total MTD sales across all channels
+    let totalMTDSales = salesStats.reduce((total, channelData) => {
+      return total + (channelData['MTD VALUE'] || 0);
+    }, 0);
+
     // Build the report logic with all channels and include LMTD and FTD
     let lmtDataMap = {};
     let ftdDataMap = {};
@@ -3452,7 +3475,6 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
       ftdDataMap[item._id] = item['FTD'] || 0;
     });
 
-    let totalMTDSales = 0;
     let report = channels.map(channel => {
       let channelData = salesStats.find(item => item._id === channel) || {};
       let lmtValue = lmtDataMap[channel] || 0;
@@ -3462,31 +3484,48 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
       let mtdVol = channelData['MTD VALUE'] || 0;
       let lmtdVol = lmtValue;
 
-      totalMTDSales += mtdVol;
 
       let pendingVol = targetVol - mtdVol;
       let growthVol = lmtdVol !== 0 ? ((mtdVol - lmtdVol) / lmtdVol) * 100 : 0;
       let contribution = totalMTDSales !== 0 ? ((mtdVol / totalMTDSales) * 100).toFixed(2) : 0;
 
-      return {
-        "Category Wise": channel,
-        "Target Vol": targetVol,
-        "Mtd Vol": mtdVol,
-        "Lmtd Vol": lmtdVol,
-        "Pending Vol": pendingVol,
-        "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
-        "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-        "% Gwth Vol": growthVol.toFixed(2),
-        "Target SO": targetValuesByChannel[channel] || 0,
-        "Activation MTD": mtdVol,
-        "Activation LMTD": lmtdVol,
-        "Pending Act": pendingVol,
-        "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
-        "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
-        "% Gwth Val": growthVol.toFixed(2),
-        "FTD": ftdValue,
-        "Contribution %": contribution
-      };
+      if (data_format == 'volume') {
+        return {
+          "Category Wise": channel,
+          "Target Vol": targetVol,
+          "Mtd Vol": mtdVol,
+          "Lmtd Vol": lmtdVol,
+          "Pending Vol": pendingVol,
+          "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "Target SO": targetValuesByChannel[channel] || 0,
+          "Pending Act": pendingVol,
+          "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "% Gwth": growthVol.toFixed(2),
+          "FTD": ftdValue,
+          "Contribution %": contribution.toString() + " %"
+        };
+      } else {
+        return {
+          "Category Wise": channel,
+          "Target Val": targetVol,
+          "Mtd Val": mtdVol,
+          "Lmtd Val": lmtdVol,
+          "Pending Val": pendingVol,
+          "ADS": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "Target SO": targetValuesByChannel[channel] || 0,
+          "Pending Act": pendingVol,
+          "ADS Activation": (mtdVol / presentDayOfMonth).toFixed(2),
+          "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
+          "% Gwth": growthVol.toFixed(2),
+          "FTD": ftdValue,
+          "Contribution %": contribution.toString() + " %"
+        };
+      }
+
+
     });
 
     // Grand total logic
@@ -3504,34 +3543,53 @@ exports.getSalesDataChannelWiseBySubordinateNameMTDW = async (req, res) => {
       ...grandTotal,
       "ADS": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS": (grandTotal["Pending Vol"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Vol": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
-      "ADS Activation": (grandTotal["Activation MTD"] / presentDayOfMonth).toFixed(2),
+      "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
-      "% Gwth Val": ((grandTotal["Activation MTD"] - grandTotal["Activation LMTD"]) / grandTotal["Activation LMTD"] * 100).toFixed(2)
+      "% Gwth": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
+      "Contribution %" : "100 %"
     };
 
     report.unshift(grandTotal); // Insert the grand total as the first row
 
-    // Column names as array
-    const columnNames = [
-      "Category Wise",
-      "Target Vol",
-      "Mtd Vol",
-      "Lmtd Vol",
-      "Pending Vol",
-      "ADS",
-      "Req. ADS",
-      "% Gwth Vol",
-      "Target SO",
-      "Activation MTD",
-      "Activation LMTD",
-      "Pending Act",
-      "ADS Activation",
-      "Req. ADS Activation",
-      "% Gwth Val",
-      "FTD",
-      "Contribution %"
-    ];
+    let columnNames = [];
+
+    if (data_format == 'volume') {
+      columnNames = [
+        "Category Wise",
+        "Target Vol",
+        "Mtd Vol",
+        "Lmtd Vol",
+        "Pending Vol",
+        "ADS",
+        "Req. ADS",
+        "Target SO",
+        "Pending Act",
+        "ADS Activation",
+        "Req. ADS Activation",
+        "% Gwth",
+        "FTD",
+        "Contribution %"
+      ];
+    } else {
+      columnNames = [
+        "Category Wise",
+        "Target Val",
+        "Mtd Val",
+        "Lmtd Val",
+        "Pending Val",
+        "ADS",
+        "Req. ADS",
+        "Target SO",
+        "Pending Act",
+        "ADS Activation",
+        "Req. ADS Activation",
+        "% Gwth",
+        "FTD",
+        "Contribution %"
+      ];
+    }
+
+
 
     // Send response with column names and report data
     res.status(200).json({ columns: columnNames, data: report });
