@@ -1346,7 +1346,7 @@ exports.getSalesDataChannelWiseForEmployeeMTDW = async (req, res) => {
           "Req. ADS Activation": (pendingVol / (30 - presentDayOfMonth)).toFixed(2),
           "% Gwth": growthVol.toFixed(2),
           "FTD": ftdValue,
-          "Contribution %": contribution
+          "Contribution %": contribution.toString() + ' %'
         };
       }
 
@@ -1370,7 +1370,7 @@ exports.getSalesDataChannelWiseForEmployeeMTDW = async (req, res) => {
       "ADS Activation": (grandTotal["Mtd Vol"] / presentDayOfMonth).toFixed(2),
       "Req. ADS Activation": (grandTotal["Pending Act"] / (30 - presentDayOfMonth)).toFixed(2),
       "% Gwth": ((grandTotal["Mtd Vol"] - grandTotal["Lmtd Vol"]) / grandTotal["Lmtd Vol"] * 100).toFixed(2),
-      "Contribution %": "100.00"  // Grand total will always have 100% contribution
+      "Contribution %": "100.00 %"  // Grand total will always have 100% contribution
     };
 
     report.unshift(grandTotal); // Insert the grand total as the first row
