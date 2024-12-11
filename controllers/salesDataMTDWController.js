@@ -5979,6 +5979,7 @@ exports.getAllSubordinatesByCodeMTDW = async (req, res) => {
 
 exports.getDealerListForEmployee = async (req, res) => {
   try {
+    console.log("Reaching dealer list for employee")
     let { code } = req; 
     let { name } = req;
     let { start_date, end_date, data_format, dealer_category } = req.query;
@@ -6016,7 +6017,7 @@ exports.getDealerListForEmployee = async (req, res) => {
 
     // Fetch dealer codes based on TSE name from DealerListTseWise model
     const dealerListTseWiseQuery = {
-      TSE: name  // Match TSE field to the provided employee name
+      [position]: name  // Match TSE field to the provided employee name
     };
 
     const dealerListTseWise = await DealerListTseWise.find(dealerListTseWiseQuery, { "Dealer Code": 1, "DEALER NAME": 1 });
