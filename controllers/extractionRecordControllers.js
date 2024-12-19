@@ -1224,21 +1224,24 @@ exports.getExtractionOverviewForAdmins = async (req, res) => {
                 const rowTotal = Object.entries(row)
                     .filter(([brand]) => brand !== 'Price Class' && brand !== 'Rank of Samsung')
                     .reduce((sum, [, value]) => sum + parseFloat(value || 0), 0);
-
+                console.log("Row Total: ", rowTotal);
                 Object.keys(row).forEach((brand) => {
                     if (brand !== 'Price Class' && brand !== 'Rank of Samsung') {
                         row[brand] = ((row[brand] / rowTotal) * 100).toFixed(2);
                         row[brand] = row[brand].toString() + " %";
                         console.log("Row Brand: ", row[brand]);
                     }
-                });
+                }
+            );
 
             });
 
 
             Object.keys(rawTotalsRow).forEach((brand) => {
                 if (brand !== 'Price Class' && brand !== 'Rank of Samsung') {
-                    rawTotalsRow[brand] = ((rawTotalsRow[brand] / overallTotal) * 100).toFixed(2);
+                    rawTotalsRow[brand] = (((rawTotalsRow[brand] / overallTotal) * 100).toFixed(2)).toString() + " %";
+
+                    console.log("Row totals [brand]: ", rawTotalsRow[brand]);
                 }
             });
         }
