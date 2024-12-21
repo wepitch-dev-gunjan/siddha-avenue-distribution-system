@@ -246,3 +246,64 @@ exports.addProductsFromCSV = async (req, res) => {
     res.status(500).send("Internal server error");
   }
 };
+
+
+exports.getAllProductsForDealer = async (req, res) => {
+  try {
+      const { query, segment, category, status, minPrice, maxPrice } = req.body; // Extract filters from query parameters
+
+      // Log filters for debugging
+      console.log("Filters received:", { query, segment, category, status, minPrice, maxPrice });
+
+      // Create a base filter object
+      let filter = {};
+
+      // Filter by status (default to 'live' if no status is provided)
+      filter.Status = status || 'live';
+
+      // Apply other filters if present
+      if (query && query.trim() !== "") {
+          const lowerCaseQuery = query.toLowerCase();
+          filter.$or = [
+              { Brand: { $regex: lowerCaseQuery, $options: 'i' } },
+              { Model: { $regex: lowerCaseQuery, $options: 'i' } },
+              { ProductCode: { $regex: lowerCaseQuery, $options: 'i' } },
+              { Category: { $regex: lowerCaseQuery, $options: 'i' } }
+          ];
+      }
+
+
+      if (segment) {
+          filter.Segment = segment; // Filter by segment if provided
+      }
+
+      if (category) {
+          filter.Category = category; // Filter by category if provided
+      }
+
+      // Apply price range filter if both minPrice and maxPrice are provided
+      if (minPrice || maxPrice) {
+          filter.Price = {};
+          if (minPrice) {
+              filter.Price.$gte = parseFloat(minPrice); // Minimum price (greater than or equal to)
+          }
+          if (maxPrice) {
+              filter.Price.$lte = parseFloat(maxPrice); // Maximum price (less than or equal to)
+          }
+      }
+
+      // Retrieve products based on the filter
+      const products = await Product.find(filter);
+
+      // If no products are found, return a message
+      if (products.length === 0) {
+          return res.status(200).json({ message: 'No Matching Products Found' });
+      }
+
+      // Return the filtered products
+      return res.status(200).json({ products });
+  } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
